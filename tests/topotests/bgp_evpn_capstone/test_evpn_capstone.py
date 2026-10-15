@@ -36,6 +36,7 @@ identities before teardown; a single exchange should not trigger MAC duplication
 """
 
 import json
+from datetime import datetime, timezone
 import os
 import sys
 import threading
@@ -47,13 +48,16 @@ import pytest
 
 # Save the Current Working Directory to find configuration files.
 CWD = os.path.dirname(os.path.realpath(__file__))
+
+# Add both directories to the Python search path.
+sys.path.insert(0, CWD)
 sys.path.append(os.path.join(CWD, "../"))
 
 # pylint: disable=C0413
-# Import topogen and topotest helpers
 from lib import topotest
 from lib.topogen import Topogen, get_topogen
 from lib.topolog import logger
+from mobility_metrics import MobilityMetrics
 
 pytestmark = [pytest.mark.bgpd, pytest.mark.evpn]
 
@@ -1049,22 +1053,57 @@ def _mobility_run_pair(tgen, first_host_name, second_host_name):
             "localSequence"
         ]
 
-    # Exchange the complete identities using the same helper for either pair.
-    after_states = _mobility_exchange_pair(tgen, first, second)
-    # Wait for new local/remote locations, with no duplicate MAC flags.
-    _mobility_wait(_mobility_check_locations, (tgen, after_states))
-    # Save the new entries for the sequence checks and the report.
-    after = _mobility_snapshot(tgen, after_states)
-    for state in after_states:
-        sequence = after[state["leaf"]][state["mac"]]["localSequence"]
-        assert sequence > original_sequences[state["mac"]], (
-            "Mobility sequence did not increase for {}".format(state["mac"])
+    # Start independent measurements before the identity swap.
+    metrics_root = os.environ.get(
+        "MOBILITY_RESULTS_DIR", "/home/frr/frr/tests/topotests/bgp_evpn_capstone/mobility_results"
+    )
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+    targets = {state["host"]: state["ip"].split("/")[0] for state in before_states}
+    monitor = MobilityMetrics(
+        tgen, metrics_root, run_id, targets,
+        routers=sorted({first["leaf"], second["leaf"], "leaf3", "leaf5"}),
+    )
+    monitor.start()
+    try:
+        logger.info(
+            "Starting movement: %s <-> %s",
+            first_host_name,
+            second_host_name
         )
 
-    # Normal gateway ARP creates the IP bindings needed for routed traffic.
-    _mobility_send_arp(tgen, after_states, gratuitous=False)
-    # Retry controller pings while the corresponding IP routes finish updating.
-    _mobility_wait(_mobility_check_controller, (tgen, after_states), timeout=20)
+        start_time = time.monotonic()
+
+        # Exchange the complete identities using the same helper for either pair.
+        after_states = _mobility_exchange_pair(tgen, first, second)
+        logger.info("IP/MAC exchange completed")
+        
+        # Wait for new local/remote locations, with no duplicate MAC flags.
+        _mobility_wait(_mobility_check_locations, (tgen, after_states))
+        convergence_time = time.monotonic() - start_time
+        logger.info(
+            "MAC-location verification completed in %.3f seconds",
+            convergence_time
+        )
+
+        # Save the new entries for the sequence checks and the report.
+        after = _mobility_snapshot(tgen, after_states)
+        for state in after_states:
+            sequence = after[state["leaf"]][state["mac"]]["localSequence"]
+            assert sequence > original_sequences[state["mac"]], (
+                "Mobility sequence did not increase for {}".format(state["mac"])
+            )
+
+        # Normal gateway ARP creates the IP bindings needed for routed traffic.
+        _mobility_send_arp(tgen, after_states, gratuitous=False)
+        # Retry controller pings while the corresponding IP routes finish updating.
+        _mobility_wait(_mobility_check_controller, (tgen, after_states), timeout=20)
+
+    except BaseException as exc:
+        monitor.stop(error=str(exc))
+        raise
+    else:
+        metrics_event = monitor.stop()
+        logger.info("Mobility raw metrics: %s", monitor.directory)
 
     # Log each completed pair so the progress can be followed during the test.
     logger.info(
@@ -1078,6 +1117,8 @@ def _mobility_run_pair(tgen, first_host_name, second_host_name):
         "before_macs": before,
         "after_macs": after,
         "controller_reachable": True,
+        "metrics_directory": monitor.directory,
+        "metrics_event": metrics_event,
     }
 
 
@@ -1097,6 +1138,10 @@ def test_evpn_multiple_host_pairs_mobility():
     # Repeatedly run the module-level session check before starting movement.
     _mobility_wait(_mobility_check_sessions, (tgen,), timeout=45)
     report = {"result": "incomplete", "identity_moves": 0, "pairs": []}
+    metrics_root = os.environ.get(
+        "MOBILITY_RESULTS_DIR", "/home/frr/frr/tests/topotests/bgp_evpn_capstone/mobility_results"
+    )
+    os.makedirs(metrics_root, exist_ok=True)
     try:
         for first_host_name, second_host_name in host_pairs:
             # Run the same exchange and verification helpers for this pair.
@@ -1106,7 +1151,12 @@ def test_evpn_multiple_host_pairs_mobility():
         report["result"] = "passed"
     finally:
         # Save completed pair observations even if a later pair fails.
-        report_path = os.path.join(tgen.logdir, "mobility_multiple_pairs.json")
+        report_path = os.path.join(
+            metrics_root,
+            "mobility_multiple_pairs_{}.json".format(
+                datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+            ),
+        )
         with open(report_path, "w", encoding="utf-8") as stream:
             # json.dump writes a readable JSON report to the test log folder.
             json.dump(report, stream, indent=2)
