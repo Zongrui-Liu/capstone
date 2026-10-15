@@ -44,6 +44,9 @@ import pytest
 # Save the Current Working Directory to find configuration files.
 CWD = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.join(CWD, "../"))
+sys.path.insert(0, CWD)
+
+from mobility_helpers import get_host_vtep, move_host, show_mobility_state
 
 # pylint: disable=C0413
 # Import topogen and topotest helpers
@@ -620,7 +623,7 @@ def test_host_mobility():
     leaf1 = tgen.gears["leaf1"]
     leaf2 = tgen.gears["leaf2"]
 
-    observer = tgen.gears["leaf3"]
+    observer = tgen.gears["leaf5"]
 
     # Define static movement entry
     HOST_IP = "45.0.0.11"
@@ -631,55 +634,6 @@ def test_host_mobility():
     NEW_VTEP = "10.0.0.2"
 
     GATEWAY = "45.0.0.1"
-
-    # Helper function to find the VTEP for a given host IP and MAC in the EVPN table
-    def get_host_vtep(router, host_ip, host_mac):
-        output = router.vtysh_cmd(
-            "show bgp l2vpn evpn route type macip json",
-            isjson=True
-        )
-
-        for rd, routes in output.items():
-
-            # Skip non-dictionary entries
-            if not isinstance(routes, dict):
-                continue
-
-            for prefix, route_info in routes.items():
-
-                # Skip non-dictionary route entries
-                if not isinstance(route_info, dict):
-                    continue
-
-                # Match the exact Type-2 route
-                for path_group in route_info.get("paths", []):
-
-                    if not isinstance(path_group, list):
-                        continue
-
-                    for path in path_group:
-
-                        if not isinstance(path, dict):
-                            continue
-
-                        if path.get("ip") != host_ip:
-                            continue
-
-                        if path.get("mac") != host_mac:
-                            continue
-
-                        if not path.get("valid"):
-                            continue
-
-                        if not path.get("bestpath"):
-                            continue
-
-                        for nexthop in path.get("nexthops", []):
-                            if nexthop.get("used"):
-                                return nexthop.get("ip")
-
-        return None
-
 
     # Verify the before state: host11 is reachable from leaf3 and leaf4, and the MAC is learned on leaf1.
     host11.cmd(f"ping -c 3 -W 1 {GATEWAY}")
@@ -695,23 +649,14 @@ def test_host_mobility():
         f"Expected {OLD_VTEP}, got {before}"
     )
 
-    # Move host11 #
-    # Shutdown host11's interface
-    host11.cmd_raises("ip link set eth0 down")
-    # Shutdown host21's interface
-    host21.cmd_raises("ip link set eth0 down")
-    # Remove host21's IP and MAC
-    host21.cmd_raises("ip addr flush dev eth0")
-    # Set host21's MAC to host11's MAC
-    host21.cmd_raises(f"ip link set eth0 address {HOST_MAC}")
-    # Bring up host21's interface
-    host21.cmd_raises("ip link set eth0 up")
-    # Set host21's IP to host11's IP
-    host21.cmd_raises(f"ip addr add {HOST_PREFIX} dev eth0")
-
-    # Generate traffic from host21 to the gateway to trigger ARP and Type-2 advertisement
-    output = host21.cmd(f"ping -c 3 -W 1 {GATEWAY}")
-    print(output)
+    move_host(
+        tgen,
+        source="host11",
+        target="host21",
+        ip="45.0.0.11/24",
+        mac="00:00:00:00:00:11",
+        gateway="45.0.0.1",
+    )
 
     # Wait for new EVPN location
     def check_movement():
@@ -730,6 +675,13 @@ def test_host_mobility():
         count=30,
         wait=1
     )
+    
+    if result is not None:
+        show_mobility_state(
+            tgen,
+            HOST_IP,
+            HOST_MAC
+        )
 
     assert result is None, (
         f"Mobility failed: {result}"
