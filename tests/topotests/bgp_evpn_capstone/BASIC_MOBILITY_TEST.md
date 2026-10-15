@@ -63,8 +63,7 @@ experiment. Both mobility cases require `arping` (`iputils-arping` on Ubuntu).
 ## Validation on October 8, 2026
 
 The complete suite with the simplified test passed in an isolated container:
-**9 passed in 50.00 seconds**. Source checks confirmed that the new test and its
-helpers have no `lambda` or `zip`, and all new functions have docstrings.
+**9 passed in 50.00 seconds**. 
 Both moved MACs were learned locally at their new leaves with
 mobility sequence 1, and the other leaf learned each MAC through the new VTEP.
 Neither MAC was flagged as duplicate. The controller reached both 45.0.0.11 and

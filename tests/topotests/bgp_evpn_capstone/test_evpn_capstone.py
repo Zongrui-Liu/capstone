@@ -609,7 +609,28 @@ def test_evpn_type2_routes_imported():
 
 
 def _read_robot_mac(router, mac):
-    """Read one robot's MAC entry from a leaf's EVPN table in VNI 1000."""
+    """Read one MAC entry from a leaf's EVPN table in robot VNI 1000.
+
+    Args:
+        router: Running FRR leaf object, for example tgen.gears["leaf1"].
+            Pass the router object, rather than the string "leaf1".
+        mac (str): MAC address to look up, for example "00:00:00:00:00:11".
+
+    Returns:
+        dict: The MAC's FRR entry, or {} if the MAC is absent. An entry can
+        contain type, localSequence, remoteSequence, isDuplicate, and neighbors.
+        type can be "local", "remote", or a neighbor-associated "auto" record.
+        A stored sequence in an auto record does not prove a current location.
+
+    Side effects:
+        None on network configuration; this only reads the FRR table. It does
+        not send host traffic or refresh entries that have aged out.
+
+    Example in PDB, with this module imported as tevpn:
+        p tevpn._read_robot_mac(tgen.gears["leaf1"], "00:00:00:00:00:11")
+        Abbreviated result: {'type': 'local', ...}; an absent entry returns {}.
+        The fields and MAC location depend on the current simulation state.
+    """
     # vtysh_cmd runs an FRR command; isjson=True converts its JSON output
     # into a Python dictionary. The MAC address is the dictionary key.
     output = router.vtysh_cmd(
@@ -620,10 +641,29 @@ def _read_robot_mac(router, mac):
 
 
 def _check_robot_mac_location(router, mac, expected_type, expected_vtep=None):
-    """Check a MAC's location and duplicate flag; return None when correct.
+    """Check one MAC's location and confirm it is not flagged as duplicate.
 
-    expected_type is "local" or "remote". A remote MAC must point to
-    expected_vtep. Returning an error message allows the caller to retry.
+    Args:
+        router: Running FRR leaf object, for example tgen.gears["leaf1"].
+        mac (str): MAC address being checked, such as "00:00:00:00:00:11".
+        expected_type (str): "local" when this leaf hosts the identity;
+            "remote" when another leaf hosts it.
+        expected_vtep (str or None): Required VTEP IP for a remote entry,
+            for example "10.0.0.2". Ignored for a local entry; defaults to None.
+
+    Returns:
+        None: The type, remote VTEP when applicable, and duplicate flag pass.
+        str: The first failed check. A missing or auto entry also fails the
+        local/remote check. This helper reports an error; it does not retry.
+
+    Side effects:
+        None on network configuration; this only reads the FRR table.
+
+    Example in PDB, if this identity is currently local to leaf1:
+        !leaf1 = tgen.gears["leaf1"]
+        !mac = "00:00:00:00:00:11"
+        p tevpn._check_robot_mac_location(leaf1, mac, "local")
+        Result: None. A None result means success, not missing output.
     """
     # _read_robot_mac gets this MAC's current forwarding information from FRR.
     entry = _read_robot_mac(router, mac)
@@ -836,8 +876,31 @@ def test_evpn_host11_host21_mobility():
 def _mobility_host_state(tgen, host_name):
     """Read a robot host's current IP/MAC and find its leaf in the topology.
 
-    Robot hosts use VNI 1000 and one global IPv4 address on eth0. Reading the
-    current identity also works when an earlier test has already moved it.
+    Args:
+        tgen: Existing running Topogen topology, obtained with get_topogen().
+            It provides hosts through tgen.net and FRR routers through
+            tgen.gears. It is not a hostname and does not create a new fabric.
+        host_name (str): Host namespace name in LEAVES, such as "host11".
+            Pass the name, rather than a host object, IP, MAC, or leaf name.
+
+    Returns:
+        dict: Keys are host, leaf, vtep, gateway, ip, and mac. leaf and vtep
+        describe the namespace's fixed attachment; ip and mac are read from
+        its current eth0 configuration and may already have been exchanged.
+
+    Requirements:
+        A running topology; a robot host in VNI 1000; one global IPv4 address
+        on eth0. Invalid host names or address counts raise AssertionError.
+
+    Side effects:
+        None on network configuration. Linux commands only read eth0 state.
+
+    Example in PDB, before the original host11 identity has moved:
+        p tevpn._mobility_host_state(tgen, "host11")
+        {'host': 'host11', 'leaf': 'leaf1', 'vtep': '10.0.0.1',
+         'gateway': '45.0.0.1', 'ip': '45.0.0.11/24',
+         'mac': '00:00:00:00:00:11'}
+        Actual IP/MAC values depend on earlier exchanges.
     """
     leaf_name = None
     for name, spec in LEAVES.items():
@@ -879,7 +942,25 @@ def _mobility_host_state(tgen, host_name):
 
 
 def _mobility_check_sessions(tgen):
-    """Return None when the underlay and EVPN BGP neighbors are ready."""
+    """Check all expected underlay and EVPN BGP sessions once.
+
+    Args:
+        tgen: Existing running Topogen object from get_topogen(). Its gears
+            dictionary provides the routers whose sessions will be checked.
+
+    Returns:
+        None: All expected IPv4 unicast and L2VPN EVPN peers are Established.
+        str: The first session error returned by the existing peer checker.
+
+    Side effects:
+        None on network configuration. This reads BGP state and does not wait
+        or generate host traffic. Session readiness alone does not check MACs.
+
+    Example in PDB:
+        p tevpn._mobility_check_sessions(tgen)
+        None
+        To wait for readiness, use _mobility_wait with this named checker.
+    """
     # Reuse the existing helper that lists each router's expected BGP peers.
     expected_peers = _expected_peers()
     for router_name, peers in expected_peers.items():
@@ -895,8 +976,29 @@ def _mobility_check_sessions(tgen):
 def _mobility_wait(check_function, arguments, timeout=30):
     """Retry a named check until it returns None, or fail after timeout seconds.
 
-    arguments is a tuple of the parameters for that check. This allows the
-    same wait helper to be used without lambdas or nested functions.
+    Args:
+        check_function: Function object to call, such as
+            _mobility_check_locations. Pass its name without calling it.
+            The check must return None on success or an error string on failure.
+        arguments (tuple): Parameters to pass to that function. For example,
+            (tgen, states) supplies two parameters. (tgen,) supplies one;
+            the trailing comma makes it a tuple.
+        timeout (int or float): Retry time budget in seconds; defaults to 30.
+            Each unsuccessful check is followed by a 0.5-second wait. A check
+            already running is not interrupted when the deadline passes.
+
+    Returns:
+        None on success. A timeout raises a pytest failure containing the last
+        error. Exceptions raised by the check propagate without being retried.
+
+    Side effects:
+        Those of the chosen checker. Location/session checks only read state;
+        _mobility_check_controller sends pings on each attempt.
+
+    Example in PDB:
+        !tevpn._mobility_wait(tevpn._mobility_check_sessions, (tgen,), timeout=45)
+        Successful calls have no return value to print. Use print(...) if you
+        want to see None explicitly. No lambda or nested function is needed.
     """
     # monotonic measures elapsed time independently of wall-clock changes.
     deadline = time.monotonic() + timeout
@@ -914,7 +1016,28 @@ def _mobility_wait(check_function, arguments, timeout=30):
 
 
 def _mobility_check_locations(tgen, host_states):
-    """Check both MACs on every leaf in VNI 1000, including duplicate flags."""
+    """Check the supplied MAC locations and duplicate flags on robot leaves.
+
+    Args:
+        tgen: Existing running Topogen object from get_topogen().
+        host_states (list of dict): Expected attachment records from
+            _mobility_host_state or _mobility_exchange_pair. Each record needs
+            mac, leaf, and vtep. Use after-exchange records after a move;
+            before-exchange records still describe the old locations.
+
+    Returns:
+        None if every listed MAC is local on its expected leaf, remote through
+        its expected VTEP on the other VNI 1000 leaves, and not duplicate.
+        Otherwise returns the first error string. It does not retry or refresh.
+
+    Side effects:
+        None on network configuration; this reads FRR MAC entries.
+
+    Example in PDB, with current records saved in states:
+        p tevpn._mobility_check_locations(tgen, states)
+        None
+        None means all checks passed. An error string explains what is wrong.
+    """
     for leaf_name, spec in LEAVES.items():
         if spec["l2vni"] != 1000:
             continue
@@ -936,7 +1059,27 @@ def _mobility_check_locations(tgen, host_states):
 
 
 def _mobility_snapshot(tgen, host_states):
-    """Save both MAC entries from every leaf participating in robot VNI 1000."""
+    """Read the supplied MACs on every leaf participating in robot VNI 1000.
+
+    Args:
+        tgen: Existing running Topogen object from get_topogen().
+        host_states (list of dict): Host records from _mobility_host_state or
+            _mobility_exchange_pair. Only their mac fields are used here.
+
+    Returns:
+        dict: Nested entries indexed as snapshot[leaf_name][mac_address].
+        Each entry is the raw dictionary from _read_robot_mac; a missing MAC
+        gives {}. The snapshot records observations without validating them.
+
+    Side effects:
+        None on network configuration. This does not refresh MAC learning.
+
+    Example in PDB:
+        !snapshot = tevpn._mobility_snapshot(tgen, states)
+        p snapshot["leaf1"][states[0]["mac"]]
+        Abbreviated result: {'type': 'local', ...}, or {} when absent. Other leaves
+        may report remote entries. Actual fields depend on the current state.
+    """
     snapshot = {}
     for leaf_name, spec in LEAVES.items():
         if spec["l2vni"] != 1000:
@@ -951,7 +1094,29 @@ def _mobility_snapshot(tgen, host_states):
 
 
 def _mobility_send_arp(tgen, host_states, gratuitous):
-    """Announce each host's own IP, or exchange normal ARP with its gateway."""
+    """Send gratuitous announcements or normal gateway ARP for selected hosts.
+
+    Args:
+        tgen: Existing running Topogen object from get_topogen().
+        host_states (list of dict): Current host records with host, ip, and
+            gateway fields. Use fresh records or the returned after_states
+            after an exchange, so packets advertise the currently assigned IP.
+        gratuitous (bool): True sends one arping -U announcement of each host's
+            own IP. False exchanges normal ARP with each host's gateway to
+            establish the IP binding used for routed controller traffic.
+
+    Returns:
+        None. A failed command raises an error through cmd_raises.
+
+    Side effects:
+        Sends ARP traffic and can update MAC learning, neighbor tables, and
+        EVPN advertisements. Requires arping installed in the container.
+
+    Example in PDB, with current records saved in states:
+        !tevpn._mobility_send_arp(tgen, states, gratuitous=False)
+        Successful calls have no return value to print. Use gratuitous=True
+        to announce the hosts' own addresses instead of querying the gateway.
+    """
     for state in host_states:
         host = tgen.net[state["host"]]
         if gratuitous:
@@ -968,8 +1133,37 @@ def _mobility_send_arp(tgen, host_states, gratuitous):
 def _mobility_exchange_pair(tgen, first, second):
     """Exchange two hosts' complete IP/MAC pairs and return their new states.
 
-    first and second are dictionaries from _mobility_host_state. The host
-    namespaces, leaf attachments, and links stay in place during the exchange.
+    Args:
+        tgen: Existing running Topogen object from get_topogen().
+        first (dict): Fresh state of the first host, obtained with
+            _mobility_host_state(tgen, "host11"), for example. Pass the state
+            dictionary, rather than the string "host11".
+        second (dict): Fresh state of the second host, obtained in the same
+            way. Both records need host, leaf, vtep, gateway, ip, and mac.
+
+    Returns:
+        list: [first_after, second_after], containing the two new state
+        dictionaries. The input dictionaries remain unchanged. Host names,
+        leaf attachments, VTEPs, and gateways stay fixed; IP/MAC pairs exchange.
+
+    Requirements:
+        Different leaves, a shared gateway, distinct IPs and MACs, eth0, and
+        arping. Read states immediately before use; stale IP values can make
+        the address-removal commands fail.
+
+    Side effects:
+        Changes live IP/MAC configuration, restores default routes, clears
+        host neighbor caches, and sends GARP. Links stay up. This helper does
+        not wait for convergence, compare sequences, test the controller,
+        perform normal gateway ARP, or automatically roll back a failure.
+        Prefer _mobility_run_pair for a complete checked exchange.
+
+    Example in PDB:
+        !first = tevpn._mobility_host_state(tgen, "host11")
+        !second = tevpn._mobility_host_state(tgen, "host21")
+        !after_states = tevpn._mobility_exchange_pair(tgen, first, second)
+        p after_states[0]["ip"] == second["ip"]
+        True
     """
     assert first["leaf"] != second["leaf"], "Hosts must be on different leaves"
     assert first["gateway"] == second["gateway"], "Hosts must share a gateway"
@@ -1013,7 +1207,26 @@ def _mobility_exchange_pair(tgen, first, second):
 
 
 def _mobility_check_controller(tgen, host_states):
-    """Return None when the controller can ping both robot identities."""
+    """Ping the supplied robot IPs once each from the controller.
+
+    Args:
+        tgen: Existing running Topogen object with tgen.net["controller"].
+        host_states (list of dict): Current robot records; only their ip
+            fields are used. Addresses may include /24; the prefix is removed.
+
+    Returns:
+        None if every ping succeeds, or an error string for the first failed
+        target. None is success; this checker does not return True or False.
+
+    Side effects:
+        Sends ICMP traffic using ping -c 1 -W 1 for each target reached in the
+        loop. This checks reachability, not packet-loss or convergence time.
+
+    Example in PDB, after normal gateway ARP has established the IP bindings:
+        p tevpn._mobility_check_controller(tgen, states)
+        None
+        Wrap this checker in _mobility_wait to retry while routes converge.
+    """
     controller = tgen.net["controller"]
     for state in host_states:
         address = state["ip"].split("/")[0]
@@ -1028,7 +1241,60 @@ def _mobility_check_controller(tgen, host_states):
 
 
 def _mobility_run_pair(tgen, first_host_name, second_host_name):
-    """Exchange any two robot hosts and verify location, sequence, and traffic."""
+    """Exchange a robot host pair once and verify the resulting mobility.
+
+    This is the main helper for teammates who want one complete checked move.
+    See MULTIPLE_PAIR_MOBILITY.md for the PDB quick start and a full report example.
+
+    Args:
+        tgen: The existing running Topogen topology. Get it with
+            tgen = tevpn.get_topogen() after importing this module as tevpn.
+            tgen.net contains host objects and tgen.gears contains FRR routers.
+            Pass this object, rather than a hostname or a new Topogen instance.
+        first_host_name (str): First host namespace name, for example "host11"
+            or "host12". Pass a string, rather than its IP, MAC, or host object.
+        second_host_name (str): Second host namespace name, for example
+            "host21" or "host22", on another leaf in the same robot fabric.
+
+    Requirements:
+        The topology and BGP sessions must be running. Both hosts must be in
+        LEAVES, use robot VNI 1000 with a shared gateway and one IPv4 address on
+        eth0, and have distinct IP/MAC identities. arping must be installed.
+        This helper expects normal movement without duplicate flags; repeated
+        rapid exchanges can trigger duplicate detection and make it fail.
+
+    Returns:
+        dict: A report with these keys, returned only after all checks pass:
+            hosts: The two host namespace names, in call order.
+            identity_moves: 2, because both robot identities change leaves.
+            before_hosts: Two records of the original current IP/MAC states.
+            after_hosts: Two records of the new current IP/MAC states.
+            before_macs: Raw MAC snapshots, indexed by leaf name then MAC.
+            after_macs: The same structure after the MAC move, before normal
+                gateway ARP. Neighbor fields reflect that earlier snapshot.
+            controller_reachable: True, meaning both destination pings passed.
+        It does not return False on failure: failed checks raise an assertion,
+        pytest failure, or command error. Failures do not roll back the hosts.
+
+    Side effects:
+        Generates ARP and pings, exchanges live IP/MAC pairs, restores routes,
+        and clears host neighbor caches. Host namespaces and links stay in
+        place. Uses current identities, even if earlier tests already swapped
+        them. Logs a completion message; manual calls do not save a JSON file.
+        The caller can save the returned report. The automated multiple-pair
+        test collects these reports into mobility_multiple_pairs.json.
+
+    Example in PDB, with tevpn imported and tgen already obtained:
+        !report = tevpn._mobility_run_pair(tgen, "host11", "host21")
+        p report["hosts"]
+        ['host11', 'host21']
+        p report["identity_moves"]
+        2
+        p report["controller_reachable"]
+        True
+        For the other pair, pass "host12" and "host22" instead. Actual IP/MAC
+        and sequence values depend on the state before this call.
+    """
     # Read the current identities and their physical leaf attachments.
     first = _mobility_host_state(tgen, first_host_name)
     second = _mobility_host_state(tgen, second_host_name)
