@@ -17,8 +17,7 @@ normal ARP with the gateway to establish its IP binding before the controller
 reachability check. The report records ARP state before and after that exchange.
 The test leaves the swapped state in place until topology teardown.
 
-The basic test uses explicit host commands and named checks, with no `lambda`
-or `zip`. Comments explain the existing functions it calls. The new helper
+The new helper
 `_read_robot_mac` reads one MAC entry from FRR, and `_check_robot_mac_location`
 checks its location and duplicate flag. Both helpers include docstrings and
 comments. The named checks `check_before_move`, `check_after_move`, and
