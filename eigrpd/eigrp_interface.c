@@ -44,6 +44,221 @@
 #include "eigrpd/eigrp_metric.h"
 
 DEFINE_MTYPE_STATIC(EIGRPD, EIGRP_IF, "EIGRP interface");
+DEFINE_MTYPE_STATIC(EIGRPD, EIGRP_CONNECTED, "EIGRP connected prefix");
+DEFINE_MTYPE_STATIC(EIGRPD, EIGRP_IF_INFO, "EIGRP interface info");
+DEFINE_MTYPE_STATIC(EIGRPD, EIGRP_IF_PARAMS, "EIGRP interface parameters");
+
+struct eigrp_if_params *eigrp_new_if_params(void)
+{
+	struct eigrp_if_params *eip;
+
+	eip = XCALLOC(MTYPE_EIGRP_IF_PARAMS, sizeof(struct eigrp_if_params));
+
+	eip->v_hello = EIGRP_HELLO_INTERVAL_DEFAULT;
+	eip->v_wait = EIGRP_HOLD_INTERVAL_DEFAULT;
+	eip->bandwidth = EIGRP_BANDWIDTH_DEFAULT;
+	eip->delay = EIGRP_DELAY_DEFAULT;
+	eip->reliability = EIGRP_RELIABILITY_DEFAULT;
+	eip->load = EIGRP_LOAD_DEFAULT;
+	eip->auth_type = EIGRP_AUTH_TYPE_NONE;
+	eip->auth_keychain = NULL;
+
+	return eip;
+}
+
+/*
+ * Allocate the per-interface EIGRP data on demand.
+ *
+ * Called both from the interface-creation hook and from the northbound
+ * configuration callbacks, so that configuration entered before EIGRP is
+ * running has somewhere to live (issue #11301).
+ */
+struct eigrp_if_info *eigrp_if_info_get(struct interface *ifp)
+{
+	struct eigrp_if_info *eii = ifp->info;
+
+	if (eii)
+		return eii;
+
+	eii = XCALLOC(MTYPE_EIGRP_IF_INFO, sizeof(struct eigrp_if_info));
+	eii->def_params = eigrp_new_if_params();
+	eii->def_params->type = eigrp_default_iftype(ifp);
+	eii->eis = list_new();
+
+	ifp->info = eii;
+
+	return eii;
+}
+
+void eigrp_if_info_free(struct interface *ifp)
+{
+	struct eigrp_if_info *eii = ifp->info;
+
+	if (!eii)
+		return;
+
+	list_delete(&eii->eis);
+
+	eigrp_del_if_params(eii->def_params);
+	XFREE(MTYPE_EIGRP_IF_PARAMS, eii->def_params);
+
+	XFREE(MTYPE_EIGRP_IF_INFO, ifp->info);
+}
+
+struct eigrp_connected *eigrp_connected_lookup(struct eigrp_interface *ei,
+					      const struct prefix *address)
+{
+	struct eigrp_connected *ec;
+	struct listnode *node;
+	struct prefix subnet;
+
+	prefix_copy(&subnet, address);
+	apply_mask(&subnet);
+
+	for (ALL_LIST_ELEMENTS_RO(ei->connected, node, ec))
+		if (prefix_same(&ec->address, &subnet))
+			return ec;
+
+	return NULL;
+}
+
+struct eigrp_connected *eigrp_connected_add(struct eigrp_interface *ei,
+					    const struct prefix *address)
+{
+	struct eigrp_connected *ec;
+
+	ec = eigrp_connected_lookup(ei, address);
+	if (ec)
+		return ec;
+
+	ec = XCALLOC(MTYPE_EIGRP_CONNECTED, sizeof(struct eigrp_connected));
+	ec->ei = ei;
+	prefix_copy(&ec->address, address);
+	apply_mask(&ec->address);
+
+	listnode_add(ei->connected, ec);
+
+	return ec;
+}
+
+/*
+ * Stop advertising a connected subnet.
+ *
+ * This keeps master's behaviour of dropping the whole prefix descriptor
+ * rather than just this instance's contribution; narrowing that is a
+ * separate concern from where the subnet list lives.
+ */
+void eigrp_connected_withdraw(struct eigrp_connected *ec)
+{
+	struct eigrp *eigrp = ec->ei->eigrp;
+	struct eigrp_prefix_descriptor *pe;
+
+	pe = eigrp_topology_table_lookup_ipv4(eigrp->topology_table,
+					      &ec->address);
+	if (pe)
+		eigrp_prefix_descriptor_delete(eigrp, eigrp->topology_table,
+					       pe);
+}
+
+void eigrp_connected_delete(struct eigrp_connected *ec)
+{
+	listnode_delete(ec->ei->connected, ec);
+	XFREE(MTYPE_EIGRP_CONNECTED, ec);
+}
+
+/*
+ * Re-derive the address EIGRP speaks from on this interface.
+ *
+ * Every packet is sourced from it (eigrp_write()), and it selects the local
+ * interface for IP_MULTICAST_IF and the multicast memberships, so it has to
+ * track ifp->connected rather than being pinned when the instance is
+ * created.  An address can be removed while EIGRP keeps running on the
+ * interface -- another address in the same subnet may remain -- and packets
+ * sourced from an address the box no longer holds go nowhere.
+ */
+void eigrp_if_refresh_address(struct eigrp_interface *ei)
+{
+	struct eigrp_connected *ec;
+	struct listnode *node;
+
+	/*
+	 * The address has to sit inside a subnet this instance advertises.
+	 * A peer accepts a packet only when its source is in one of the
+	 * subnets the peer itself runs on, so sourcing from another subnet of
+	 * the same interface -- which an interface may well carry without
+	 * EIGRP being enabled for it -- would have every packet rejected.
+	 */
+	for (ALL_LIST_ELEMENTS_RO(ei->connected, node, ec)) {
+		struct connected *secondary = NULL;
+		struct connected *co;
+
+		frr_each (if_connected, ei->ifp->connected, co) {
+			struct prefix subnet;
+
+			if (co->address->family != ec->address.family)
+				continue;
+
+			prefix_copy(&subnet, co->address);
+			apply_mask(&subnet);
+
+			if (!prefix_same(&subnet, &ec->address))
+				continue;
+
+			/*
+			 * Prefer the subnet's primary address, but a
+			 * secondary is still inside the subnet and is better
+			 * than nothing to speak from.
+			 */
+			if (CHECK_FLAG(co->flags, ZEBRA_IFA_SECONDARY)) {
+				if (!secondary)
+					secondary = co;
+				continue;
+			}
+
+			prefix_copy(&ei->address, co->address);
+			return;
+		}
+
+		if (secondary) {
+			prefix_copy(&ei->address, secondary->address);
+			return;
+		}
+	}
+
+	/* Nothing left to speak from. */
+	memset(&ei->address, 0, sizeof(ei->address));
+}
+
+/* Does this interface hold the given address? */
+bool eigrp_if_has_address(struct eigrp_interface *ei, struct in_addr address)
+{
+	struct connected *co;
+
+	frr_each (if_connected, ei->ifp->connected, co) {
+		if (co->address->family != AF_INET)
+			continue;
+
+		if (IPV4_ADDR_SAME(&address, &co->address->u.prefix4))
+			return true;
+	}
+
+	return false;
+}
+
+struct eigrp_interface *eigrp_if_lookup(struct eigrp *eigrp, struct interface *ifp)
+{
+	struct eigrp_interface *ei;
+	struct listnode *node;
+
+	if (!ifp->info)
+		return NULL;
+
+	for (ALL_LIST_ELEMENTS_RO(EIGRP_IF_EIS(ifp), node, ei))
+		if (ei->eigrp == eigrp)
+			return ei;
+
+	return NULL;
+}
 
 int eigrp_interface_cmp(const struct eigrp_interface *a, const struct eigrp_interface *b)
 {
@@ -58,9 +273,17 @@ uint32_t eigrp_interface_hash(const struct eigrp_interface *ei)
 struct eigrp_interface *eigrp_if_new(struct eigrp *eigrp, struct interface *ifp,
 				     struct prefix *p)
 {
-	struct eigrp_interface *ei = ifp->info;
+	struct eigrp_if_info *eii = eigrp_if_info_get(ifp);
+	struct eigrp_interface *ei;
 	int i;
 
+	/*
+	 * One instance per EIGRP process per interface.  A second `network`
+	 * statement in the same process matching another connected prefix
+	 * reuses this instance rather than making a new one; which prefixes
+	 * it advertises is tracked separately.
+	 */
+	ei = eigrp_if_lookup(eigrp, ifp);
 	if (ei)
 		return ei;
 
@@ -68,15 +291,17 @@ struct eigrp_interface *eigrp_if_new(struct eigrp *eigrp, struct interface *ifp,
 
 	/* Set zebra interface pointer. */
 	ei->ifp = ifp;
-	prefix_copy(&ei->address, p);
+	eigrp_if_refresh_address(ei);
 
-	ifp->info = ei;
+	listnode_add(eii->eis, ei);
 	eigrp_interface_hash_add(&eigrp->eifs, ei);
 
 	ei->type = EIGRP_IFTYPE_BROADCAST;
 
 	/* Initialize neighbor list. */
 	eigrp_nbr_hash_init(&ei->nbr_hash_head);
+
+	ei->connected = list_new();
 
 	ei->crypt_seqnum = frr_sequence32_next();
 
@@ -89,14 +314,12 @@ struct eigrp_interface *eigrp_if_new(struct eigrp *eigrp, struct interface *ifp,
 
 	ei->eigrp = eigrp;
 
-	ei->params.v_hello = EIGRP_HELLO_INTERVAL_DEFAULT;
-	ei->params.v_wait = EIGRP_HOLD_INTERVAL_DEFAULT;
-	ei->params.bandwidth = EIGRP_BANDWIDTH_DEFAULT;
-	ei->params.delay = EIGRP_DELAY_DEFAULT;
-	ei->params.reliability = EIGRP_RELIABILITY_DEFAULT;
-	ei->params.load = EIGRP_LOAD_DEFAULT;
-	ei->params.auth_type = EIGRP_AUTH_TYPE_NONE;
-	ei->params.auth_keychain = NULL;
+	/*
+	 * Configuration is owned by the interface, not by this object, so
+	 * anything set before EIGRP started is picked up here rather than
+	 * being reset to defaults.
+	 */
+	ei->params = eii->def_params;
 
 	ei->curr_bandwidth = ifp->bandwidth;
 	ei->curr_mtu = ifp->mtu;
@@ -104,34 +327,104 @@ struct eigrp_interface *eigrp_if_new(struct eigrp *eigrp, struct interface *ifp,
 	return ei;
 }
 
-int eigrp_if_delete_hook(struct interface *ifp)
+static void eigrp_if_delete_one(struct eigrp_interface *ei)
 {
-	struct eigrp_interface *ei = ifp->info;
-	struct eigrp *eigrp;
-
-	if (!ei)
-		return 0;
+	struct eigrp *eigrp = ei->eigrp;
 
 	eigrp_nbr_hash_fini(&ei->nbr_hash_head);
-
-	eigrp = ei->eigrp;
 	eigrp_interface_hash_del(&eigrp->eifs, ei);
 
+	while (!list_isempty(ei->connected))
+		eigrp_connected_delete(listnode_head(ei->connected));
+	list_delete(&ei->connected);
 	eigrp_fifo_free(ei->obuf);
 
-	XFREE(MTYPE_EIGRP_IF, ifp->info);
+	XFREE(MTYPE_EIGRP_IF, ei);
+}
+
+/*
+ * Detach one running instance from its interface and free it, leaving the
+ * interface's configuration alone.
+ *
+ * Without this, stopping EIGRP on an interface would leave the instance in
+ * the interface's table and in the process-wide hash, so the interface would
+ * still look like it was running and could never be reactivated.
+ */
+static void eigrp_if_remove(struct eigrp_interface *ei)
+{
+	struct interface *ifp = ei->ifp;
+
+	listnode_delete(EIGRP_IF_EIS(ifp), ei);
+
+	eigrp_if_delete_one(ei);
+}
+
+/*
+ * Tear down every running instance on an interface, but keep the interface's
+ * configuration.
+ *
+ * This is the path taken when an EIGRP instance goes away or a `network`
+ * statement is removed: the protocol stops, but the interface and everything
+ * configured on it remain.  Previously this freed ifp->info outright, which
+ * is why interface configuration could not outlive the protocol.
+ */
+/*
+ * Drop the instances an interface runs, optionally narrowed to one process.
+ *
+ * An interface carries one instance per EIGRP process, so a process going
+ * away must take only its own: freeing the rest would tear down another
+ * autonomous system's adjacency and leave its topology descriptors pointing
+ * at freed interfaces.  The interface itself going away takes all of them.
+ */
+static void eigrp_if_free_instances(struct eigrp *eigrp, struct interface *ifp)
+{
+	struct eigrp_interface *ei;
+	struct listnode *node, *nnode;
+
+	if (!ifp->info)
+		return;
+
+	for (ALL_LIST_ELEMENTS(EIGRP_IF_EIS(ifp), node, nnode, ei)) {
+		if (eigrp && ei->eigrp != eigrp)
+			continue;
+
+		list_delete_node(EIGRP_IF_EIS(ifp), node);
+		eigrp_if_delete_one(ei);
+	}
+}
+
+void eigrp_if_free_process(struct eigrp *eigrp, struct interface *ifp)
+{
+	eigrp_if_free_instances(eigrp, ifp);
+}
+
+void eigrp_if_free_all(struct interface *ifp)
+{
+	eigrp_if_free_instances(NULL, ifp);
+}
+
+/* The interface itself is going away, so the configuration goes with it. */
+int eigrp_if_delete_hook(struct interface *ifp)
+{
+	if (!ifp->info)
+		return 0;
+
+	eigrp_if_free_all(ifp);
+	eigrp_if_info_free(ifp);
 
 	return 0;
 }
 
 static int eigrp_ifp_create(struct interface *ifp)
 {
-	struct eigrp_interface *ei = ifp->info;
+	/*
+	 * Allocate the interface data as soon as the interface exists rather
+	 * than waiting for a `network` statement to match.  This is what lets
+	 * configuration be applied to an interface EIGRP is not running on.
+	 */
+	struct eigrp_if_info *eii = eigrp_if_info_get(ifp);
 
-	if (!ei)
-		return 0;
-
-	ei->params.type = eigrp_default_iftype(ifp);
+	eii->def_params->type = eigrp_default_iftype(ifp);
 
 	eigrp_if_update(ifp);
 
@@ -140,58 +433,80 @@ static int eigrp_ifp_create(struct interface *ifp)
 
 static int eigrp_ifp_up(struct interface *ifp)
 {
-	struct eigrp_interface *ei = ifp->info;
+	struct eigrp_interface *ei;
+	struct listnode *node, *nnode;
+	bool mtu_changed = false;
 
 	if (IS_DEBUG_EIGRP(zebra, ZEBRA_INTERFACE))
 		zlog_debug("Zebra: Interface[%s] state change to up.",
 			   ifp->name);
 
-	if (!ei)
+	if (!ifp->info)
 		return 0;
 
-	if (ei->curr_bandwidth != ifp->bandwidth) {
-		if (IS_DEBUG_EIGRP(zebra, ZEBRA_INTERFACE))
-			zlog_debug(
-				"Zebra: Interface[%s] bandwidth change %d -> %d.",
-				ifp->name, ei->curr_bandwidth,
-				ifp->bandwidth);
+	/* Every EIGRP process running on this interface is affected. */
+	for (ALL_LIST_ELEMENTS(EIGRP_IF_EIS(ifp), node, nnode, ei)) {
+		if (ei->curr_bandwidth != ifp->bandwidth) {
+			if (IS_DEBUG_EIGRP(zebra, ZEBRA_INTERFACE))
+				zlog_debug(
+					"Zebra: Interface[%s] bandwidth change %d -> %d.",
+					ifp->name, ei->curr_bandwidth,
+					ifp->bandwidth);
 
-		ei->curr_bandwidth = ifp->bandwidth;
-		// eigrp_if_recalculate_output_cost (ifp);
+			ei->curr_bandwidth = ifp->bandwidth;
+			// eigrp_if_recalculate_output_cost (ifp);
+		}
+
+		if (ei->curr_mtu != ifp->mtu) {
+			if (IS_DEBUG_EIGRP(zebra, ZEBRA_INTERFACE))
+				zlog_debug(
+					"Zebra: Interface[%s] MTU change %u -> %u.",
+					ifp->name, ei->curr_mtu, ifp->mtu);
+
+			ei->curr_mtu = ifp->mtu;
+			mtu_changed = true;
+		}
 	}
 
-	if (ei->curr_mtu != ifp->mtu) {
-		if (IS_DEBUG_EIGRP(zebra, ZEBRA_INTERFACE))
-			zlog_debug(
-				"Zebra: Interface[%s] MTU change %u -> %u.",
-				ifp->name, ei->curr_mtu, ifp->mtu);
-
-		ei->curr_mtu = ifp->mtu;
-		/* Must reset the interface (simulate down/up) when MTU
-		 * changes. */
+	/*
+	 * Must reset the interface (simulate down/up) when MTU changes.  The
+	 * MTU belongs to the interface, so the reset is interface-wide and
+	 * walks every instance itself -- it has to happen after this loop
+	 * rather than inside it.
+	 */
+	if (mtu_changed) {
 		eigrp_if_reset(ifp);
 		return 0;
 	}
 
-	eigrp_if_up(ifp->info);
+	for (ALL_LIST_ELEMENTS(EIGRP_IF_EIS(ifp), node, nnode, ei))
+		eigrp_if_up(ei);
 
 	return 0;
 }
 
 static int eigrp_ifp_down(struct interface *ifp)
 {
+	struct eigrp_interface *ei;
+	struct listnode *node, *nnode;
+
 	if (IS_DEBUG_EIGRP(zebra, ZEBRA_INTERFACE))
 		zlog_debug("Zebra: Interface[%s] state change to down.",
 			   ifp->name);
 
-	if (ifp->info)
-		eigrp_if_down(ifp->info);
+	if (!ifp->info)
+		return 0;
+
+	for (ALL_LIST_ELEMENTS(EIGRP_IF_EIS(ifp), node, nnode, ei))
+		eigrp_if_down(ei);
 
 	return 0;
 }
 
 static int eigrp_ifp_destroy(struct interface *ifp)
 {
+	struct eigrp_interface *ei;
+
 	if (if_is_up(ifp))
 		zlog_warn("Zebra: got delete of %s, but interface is still up",
 			  ifp->name);
@@ -202,8 +517,12 @@ static int eigrp_ifp_destroy(struct interface *ifp)
 			ifp->name, ifp->ifindex, (unsigned long long)ifp->flags,
 			ifp->metric, ifp->mtu);
 
-	if (ifp->info)
-		eigrp_if_free(ifp->info, INTERFACE_DOWN_BY_ZEBRA);
+	if (ifp->info) {
+		struct listnode *node, *nnode;
+
+		for (ALL_LIST_ELEMENTS(EIGRP_IF_EIS(ifp), node, nnode, ei))
+			eigrp_if_free(ei, INTERFACE_DOWN_BY_ZEBRA);
+	}
 
 	return 0;
 }
@@ -217,7 +536,13 @@ void eigrp_if_init(void)
 	hook_register_prio(if_down, 0, eigrp_ifp_down);
 	hook_register_prio(if_unreal, 0, eigrp_ifp_destroy);
 	/* Initialize Zebra interface data structure. */
-	// hook_register_prio(if_add, 0, eigrp_if_new);
+	/*
+	 * eigrp_ifp_create() allocates the interface data, so there is no
+	 * longer a disabled if_add hook trying to build a prefix-derived
+	 * struct eigrp_interface before one can exist.  Configuration that
+	 * arrives before the interface is known to zebra is handled by the
+	 * northbound callbacks calling eigrp_if_info_get() on demand.
+	 */
 	hook_register_prio(if_del, 0, eigrp_if_delete_hook);
 }
 
@@ -242,59 +567,42 @@ static void eigrp_mtu_convert(struct eigrp_metrics *metric, uint32_t host_mtu)
 	metric->mtu[2] = nm[3];
 }
 
-int eigrp_if_up(struct eigrp_interface *ei)
+/*
+ * Contribute one connected subnet to the topology table.
+ *
+ * This runs again every time the interface is brought back up, and
+ * eigrp_if_reset() does exactly that on a bandwidth, delay or MTU change
+ * while eigrp_if_down() deliberately leaves the descriptor in place.  So an
+ * existing descriptor from this instance is refreshed with the new metric
+ * rather than duplicated -- skipping it instead would silently drop the very
+ * change that triggered the reset.
+ */
+static void eigrp_connected_advertise(struct eigrp_connected *ec,
+				      struct eigrp_metrics metric)
 {
+	struct eigrp_interface *ei = ec->ei;
+	struct eigrp *eigrp = ei->eigrp;
 	struct eigrp_prefix_descriptor *pe;
 	struct eigrp_route_descriptor *ne;
-	struct eigrp_metrics metric;
+	struct eigrp_fsm_action_message msg;
 	struct eigrp_interface *ei2;
-	struct eigrp *eigrp;
 
-	if (ei == NULL)
-		return 0;
-
-	eigrp = ei->eigrp;
-	eigrp_adjust_sndbuflen(eigrp, ei->ifp->mtu);
-
-	eigrp_if_stream_set(ei);
-
-	/* Set multicast memberships appropriately for new state. */
-	eigrp_if_set_multicast(ei);
-
-	event_add_event(master, eigrp_hello_timer, ei, (1), &ei->t_hello);
-
-	/*Prepare metrics*/
-	metric.bandwidth = eigrp_bandwidth_to_scaled(ei->params.bandwidth);
-	metric.delay = eigrp_delay_to_scaled(ei->params.delay);
-	metric.load = ei->params.load;
-	metric.reliability = ei->params.reliability;
-	eigrp_mtu_convert(&metric, ei->ifp->mtu);
-	metric.hop_count = 0;
-	metric.flags = 0;
-	metric.tag = 0;
-
-	/*Add connected entry to topology table*/
-
-	ne = eigrp_route_descriptor_new();
-	ne->ei = ei;
-	ne->reported_metric = metric;
-	ne->total_metric = metric;
-	ne->distance = eigrp_calculate_metrics(eigrp, metric);
-	ne->reported_distance = 0;
-	ne->adv_router = eigrp->neighbor_self;
-	ne->flags = EIGRP_ROUTE_DESCRIPTOR_SUCCESSOR_FLAG;
-
-	struct prefix dest_addr;
-
-	dest_addr = ei->address;
-	apply_mask(&dest_addr);
 	pe = eigrp_topology_table_lookup_ipv4(eigrp->topology_table,
-					      &dest_addr);
+					      &ec->address);
 
 	if (pe == NULL) {
+		ne = eigrp_route_descriptor_new();
+		ne->ei = ei;
+		ne->reported_metric = metric;
+		ne->total_metric = metric;
+		ne->distance = eigrp_calculate_metrics(eigrp, metric);
+		ne->reported_distance = 0;
+		ne->adv_router = eigrp->neighbor_self;
+		ne->flags = EIGRP_ROUTE_DESCRIPTOR_SUCCESSOR_FLAG;
+
 		pe = eigrp_prefix_descriptor_new();
 		pe->serno = eigrp->serno;
-		prefix_copy(&pe->destination, &dest_addr);
+		prefix_copy(&pe->destination, &ec->address);
 		pe->af = AF_INET;
 		pe->nt = EIGRP_TOPOLOGY_TYPE_CONNECTED;
 
@@ -313,21 +621,73 @@ int eigrp_if_up(struct eigrp_interface *ei)
 
 		pe->req_action &= ~EIGRP_FSM_NEED_UPDATE;
 		listnode_delete(eigrp->topology_changes_internalIPV4, pe);
-	} else {
-		struct eigrp_fsm_action_message msg;
 
-		ne->prefix = pe;
-		eigrp_route_descriptor_add(eigrp, pe, ne);
-
-		msg.packet_type = EIGRP_OPC_UPDATE;
-		msg.eigrp = eigrp;
-		msg.data_type = EIGRP_CONNECTED;
-		msg.adv_router = NULL;
-		msg.entry = ne;
-		msg.prefix = pe;
-
-		eigrp_fsm_event(&msg);
+		return;
 	}
+
+	ne = eigrp_route_descriptor_lookup_ei(pe, eigrp->neighbor_self, ei);
+	if (ne == NULL) {
+		ne = eigrp_route_descriptor_new();
+		ne->ei = ei;
+		ne->reported_distance = 0;
+		ne->adv_router = eigrp->neighbor_self;
+		ne->flags = EIGRP_ROUTE_DESCRIPTOR_SUCCESSOR_FLAG;
+		ne->prefix = pe;
+		ne->reported_metric = metric;
+		ne->total_metric = metric;
+		ne->distance = eigrp_calculate_metrics(eigrp, metric);
+
+		eigrp_route_descriptor_add(eigrp, pe, ne);
+	} else {
+		/* Already advertising it -- take the new metric. */
+		ne->reported_metric = metric;
+		ne->total_metric = metric;
+		ne->distance = eigrp_calculate_metrics(eigrp, metric);
+	}
+
+	msg.packet_type = EIGRP_OPC_UPDATE;
+	msg.eigrp = eigrp;
+	msg.data_type = EIGRP_CONNECTED;
+	msg.adv_router = NULL;
+	msg.entry = ne;
+	msg.prefix = pe;
+
+	eigrp_fsm_event(&msg);
+}
+
+int eigrp_if_up(struct eigrp_interface *ei)
+{
+	struct eigrp_metrics metric;
+	struct eigrp_connected *ec;
+	struct listnode *node;
+	struct eigrp *eigrp;
+
+	if (ei == NULL)
+		return 0;
+
+	eigrp = ei->eigrp;
+	eigrp_adjust_sndbuflen(eigrp, ei->ifp->mtu);
+
+	eigrp_if_stream_set(ei);
+
+	/* Set multicast memberships appropriately for new state. */
+	eigrp_if_set_multicast(ei);
+
+	event_add_event(master, eigrp_hello_timer, ei, (1), &ei->t_hello);
+
+	/*Prepare metrics*/
+	metric.bandwidth = eigrp_bandwidth_to_scaled(ei->params->bandwidth);
+	metric.delay = eigrp_delay_to_scaled(ei->params->delay);
+	metric.load = ei->params->load;
+	metric.reliability = ei->params->reliability;
+	eigrp_mtu_convert(&metric, ei->ifp->mtu);
+	metric.hop_count = 0;
+	metric.flags = 0;
+	metric.tag = 0;
+
+	/* Advertise every connected subnet this instance speaks for. */
+	for (ALL_LIST_ELEMENTS_RO(ei->connected, node, ec))
+		eigrp_connected_advertise(ec, metric);
 
 	return 1;
 }
@@ -372,7 +732,7 @@ void eigrp_if_stream_unset(struct eigrp_interface *ei)
 
 bool eigrp_if_is_passive(struct eigrp_interface *ei)
 {
-	if (ei->params.passive_interface == EIGRP_IF_ACTIVE)
+	if (ei->params->passive_interface == EIGRP_IF_ACTIVE)
 		return false;
 
 	if (ei->eigrp->passive_interface_default == EIGRP_IF_ACTIVE)
@@ -422,37 +782,41 @@ uint8_t eigrp_default_iftype(struct interface *ifp)
 
 void eigrp_if_free(struct eigrp_interface *ei, int source)
 {
-	struct prefix dest_addr;
-	struct eigrp_prefix_descriptor *pe;
-	struct eigrp *eigrp = ei->eigrp;
+	struct eigrp_connected *ec;
+	struct listnode *node;
 
 	if (source == INTERFACE_DOWN_BY_VTY) {
 		event_cancel(&ei->t_hello);
 		eigrp_hello_send(ei, EIGRP_HELLO_GRACEFUL_SHUTDOWN, NULL);
 	}
 
-	dest_addr = ei->address;
-	apply_mask(&dest_addr);
-	pe = eigrp_topology_table_lookup_ipv4(eigrp->topology_table,
-					      &dest_addr);
-	if (pe)
-		eigrp_prefix_descriptor_delete(eigrp, eigrp->topology_table,
-					       pe);
+	for (ALL_LIST_ELEMENTS_RO(ei->connected, node, ec))
+		eigrp_connected_withdraw(ec);
 
 	eigrp_if_down(ei);
+
+	/*
+	 * Drop the instance rather than leaving it behind stopped: a later
+	 * `network` statement covering this interface must be able to create
+	 * a fresh one.  The interface configuration is untouched.
+	 */
+	eigrp_if_remove(ei);
 }
 
 /* Simulate down/up on the interface.  This is needed, for example, when
    the MTU changes. */
 void eigrp_if_reset(struct interface *ifp)
 {
-	struct eigrp_interface *ei = ifp->info;
+	struct eigrp_interface *ei;
+	struct listnode *node, *nnode;
 
-	if (!ei)
+	if (!ifp->info)
 		return;
 
-	eigrp_if_down(ei);
-	eigrp_if_up(ei);
+	for (ALL_LIST_ELEMENTS(EIGRP_IF_EIS(ifp), node, nnode, ei)) {
+		eigrp_if_down(ei);
+		eigrp_if_up(ei);
+	}
 }
 
 struct eigrp_interface *eigrp_if_lookup_by_local_addr(struct eigrp *eigrp,
@@ -465,7 +829,7 @@ struct eigrp_interface *eigrp_if_lookup_by_local_addr(struct eigrp *eigrp,
 		if (ifp && ei->ifp != ifp)
 			continue;
 
-		if (IPV4_ADDR_SAME(&address, &ei->address.u.prefix4))
+		if (eigrp_if_has_address(ei, address))
 			return ei;
 	}
 

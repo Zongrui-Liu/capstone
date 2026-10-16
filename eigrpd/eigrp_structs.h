@@ -133,17 +133,80 @@ struct eigrp_if_params {
 	int auth_type;       /* EIGRP authentication type */
 };
 
+/*
+ * Per-interface EIGRP data, attached to ifp->info.
+ *
+ * Historically a bare "struct eigrp_interface" is hung off ifp->info, and it
+ * is only allocated once a `network` statement matches a connected prefix (see
+ * eigrp_network_run_interface()).  That single object conflates three
+ * independent concerns:
+ *
+ *   1. interface *configuration* (struct eigrp_if_params: delay, bandwidth,
+ *      hello-interval, hold-time, passive, authentication);
+ *   2. a *single* connected prefix (struct prefix address); and
+ *   3. running *protocol state* (neighbors, output buffer, timers, stats).
+ *
+ * Because the object is prefix-derived it cannot exist before the protocol is
+ * active, so per-interface configuration entered before a `network` statement
+ * is rejected with NB_ERR_INCONSISTENCY (issue #11301), and an interface can
+ * only ever run EIGRP on one connected prefix.
+ *
+ * struct eigrp_if_info splits interface *configuration*, which must be
+ * available as soon as the interface exists, from the running per-address
+ * interface instances.  This mirrors ospfd's struct ospf_if_info and is the
+ * separation requested in the reviews of #14765 and #18307.
+ */
+struct eigrp_if_info {
+	/* Interface-wide parameters.  Allocated as soon as the interface
+	 * exists and independent of whether EIGRP runs on it, which is what
+	 * allows configuration to be accepted before a `network` statement.
+	 *
+	 * Unlike ospfd there is no per-address parameter table here:
+	 * frr-eigrpd.yang has no per-address interface configuration (the
+	 * interface leaves are per-interface, and the `instance` list is
+	 * keyed by ASN), so a route_table of overrides would be dead code.
+	 */
+	struct eigrp_if_params *def_params;
+
+	/* Running struct eigrp_interface instances on this interface, one per
+	 * EIGRP process, since an interface can be in more than one
+	 * autonomous system.  Holds struct eigrp_interface *.
+	 */
+	struct list *eis;
+};
+
 enum { MEMBER_ALLROUTERS = 0,
        MEMBER_MAX,
 };
 
 PREDECL_HASH(eigrp_nbr_hash);
 
+/*
+ * A connected prefix that EIGRP advertises on an interface.
+ *
+ * Mirrors ifp->connected: the interface object is the wire, and these hang
+ * off it describing which of its subnets EIGRP speaks for.  Several
+ * addresses in one subnet produce a single entry, because they describe the
+ * same EIGRP prefix.
+ */
+struct eigrp_connected {
+	/* The interface instance advertising this prefix. */
+	struct eigrp_interface *ei;
+
+	/* The connected subnet, masked. */
+	struct prefix address;
+};
+
 /*EIGRP interface structure*/
 struct eigrp_interface {
 	struct eigrp_interface_hash_item eif_item;
 
-	struct eigrp_if_params params;
+	/* Interface configuration.  Points at the owning interface's
+	 * eigrp_if_info->def_params, which is allocated when the interface
+	 * appears and outlives this (prefix-derived) object.  Configuration
+	 * therefore survives EIGRP being started and stopped.
+	 */
+	struct eigrp_if_params *params;
 
 	/*multicast group refcnts */
 	bool member_allrouters;
@@ -168,6 +231,12 @@ struct eigrp_interface {
 	uint8_t type;
 
 	struct prefix address;      /* Interface prefix */
+
+	/* Connected subnets this instance advertises, as struct
+	 * eigrp_connected *.  A `network` statement adds every connected
+	 * subnet of the interface that it covers.
+	 */
+	struct list *connected;
 
 	/* Neighbor information. */
 	struct eigrp_nbr_hash_head nbr_hash_head;

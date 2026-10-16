@@ -136,6 +136,28 @@ static int eigrp_zebra_read_route(ZAPI_CALLBACK_ARGS)
 	return 0;
 }
 
+/* Does the interface still hold any address inside this subnet? */
+static bool eigrp_subnet_connected(struct interface *ifp,
+				   const struct prefix *subnet)
+{
+	struct connected *co;
+
+	frr_each (if_connected, ifp->connected, co) {
+		struct prefix other;
+
+		if (co->address->family != subnet->family)
+			continue;
+
+		prefix_copy(&other, co->address);
+		apply_mask(&other);
+
+		if (prefix_same(&other, subnet))
+			return true;
+	}
+
+	return false;
+}
+
 static int eigrp_interface_address_add(ZAPI_CALLBACK_ARGS)
 {
 	struct connected *c;
@@ -159,6 +181,7 @@ static int eigrp_interface_address_delete(ZAPI_CALLBACK_ARGS)
 	struct connected *c;
 	struct interface *ifp;
 	struct eigrp_interface *ei;
+	struct listnode *node, *nnode;
 
 	c = zebra_interface_address_read(cmd, zclient->ibuf, vrf_id);
 
@@ -170,14 +193,40 @@ static int eigrp_interface_address_delete(ZAPI_CALLBACK_ARGS)
 			   c->ifp->name, c->address);
 
 	ifp = c->ifp;
-	ei = ifp->info;
-	if (!ei)
-		return 0;
 
-	/* Call interface hook functions to clean up */
-	if (prefix_cmp(&ei->address, c->address) == 0)
-		eigrp_if_free(ei, INTERFACE_DOWN_BY_ZEBRA);
+	/*
+	 * The address is already off ifp->connected by now, so a subnet with
+	 * nothing left on the interface is one EIGRP must stop advertising.
+	 * Every process running here is affected, and each keeps running for
+	 * as long as it still speaks for some subnet.
+	 */
+	if (ifp->info) {
+		for (ALL_LIST_ELEMENTS(EIGRP_IF_EIS(ifp), node, nnode, ei)) {
+			struct eigrp_connected *ec;
 
+			ec = eigrp_connected_lookup(ei, c->address);
+			if (ec && !eigrp_subnet_connected(ifp, &ec->address)) {
+				eigrp_connected_withdraw(ec);
+				eigrp_connected_delete(ec);
+			}
+
+			if (list_isempty(ei->connected)) {
+				eigrp_if_free(ei, INTERFACE_DOWN_BY_ZEBRA);
+				continue;
+			}
+
+			/*
+			 * Still running, but it may have been speaking from
+			 * the address that just went away.
+			 */
+			eigrp_if_refresh_address(ei);
+		}
+	}
+
+	/*
+	 * Free on every path.  Returning early when EIGRP is not running on
+	 * the interface used to leak this.
+	 */
 	connected_free(&c);
 
 	return 0;

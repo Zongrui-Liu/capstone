@@ -787,11 +787,12 @@ struct bgp {
 #define BGP_FLAG_VRF_MAY_LISTEN		    (1ULL << 44)
 #define BGP_FLAG_SOFT_VERSION_CAPABILITY_NEW (1ULL << 45)
 #define BGP_FLAG_USE_RECURSIVE_WEIGHT (1ULL << 46)
-
 /* Use current (imported) path's attributes instead of source path's attributes
  * for bestpath comparison of imported paths.
  */
-#define BGP_FLAG_BESTPATH_USE_IMPORTED_ATTRS (1ULL << 45)
+#define BGP_FLAG_BESTPATH_USE_IMPORTED_ATTRS (1ULL << 47)
+/* Shutdown without sending notification (for HA standby transition) */
+#define BGP_FLAG_SHUTDOWN_NO_NOTIFY (1ULL << 48)
 
 	/* BGP default address-families.
 	 * New peers inherit enabled afi/safis from bgp instance.
@@ -837,6 +838,9 @@ struct bgp {
 #define BGP_VPNVX_RETAIN_ROUTE_TARGET_ALL (1 << 11)
 #define BGP_L2VPN_EVPN_SUPPRESS_IPV4_IMPORT_FROM_EVPN (1 << 12)
 #define BGP_L2VPN_EVPN_SUPPRESS_IPV6_IMPORT_FROM_EVPN (1 << 13)
+/* EVPN VPN route advertisement flags */
+#define BGP_L2VPN_EVPN_ADV_IPV4_VPN (1 << 14)
+#define BGP_L2VPN_EVPN_ADV_IPV6_VPN (1 << 15)
 
 	/* BGP per AF peer count */
 	uint32_t af_peer_count[AFI_MAX][SAFI_MAX];
@@ -1714,8 +1718,7 @@ struct peer {
 #define ROLE_RS_SERVER                      1
 #define ROLE_RS_CLIENT                      2
 #define ROLE_CUSTOMER                       3
-#define ROLE_PEER                           4
-#define ROLE_UNDEFINED                    255
+#define ROLE_PEER			    4
 
 #define ROLE_NAME_MAX_LEN                  20
 
@@ -2017,6 +2020,7 @@ struct peer {
 #define PEER_STATUS_EXT_OPT_PARAMS_LENGTH	 (1U << 5)
 #define PEER_STATUS_BFD_STRICT_HOLD_TIME_EXPIRED (1U << 6) /* BFD strict hold time expired */
 #define PEER_STATUS_COND_ADV_PENDING		 (1U << 7) /* conditional advertisement pending */
+#define PEER_STATUS_BFD_STRICT_HOLD		 (1U << 8) /* BFD strict mode holds the connection */
 
 	/* Peer status af flags (reset in bgp_stop) */
 	uint16_t af_sflags[AFI_MAX][SAFI_MAX];
@@ -2978,7 +2982,8 @@ extern void peer_tx_shutdown_message_set(struct peer *peer, const char *msg);
 extern void peer_tx_shutdown_message_unset(struct peer *peer);
 
 extern void bgp_route_map_update_timer(struct event *event);
-extern const char *bgp_get_name_by_role(uint8_t role);
+extern const char *bgp_get_local_role_name(const struct peer *peer);
+extern const char *bgp_get_remote_role_name(const struct peer *peer);
 extern enum asnotation_mode bgp_get_asnotation(struct bgp *bgp);
 
 extern void bgp_route_map_terminate(void);
@@ -2997,7 +3002,7 @@ extern struct peer_af *peer_af_create(struct peer *peer, afi_t afi, safi_t safi)
 extern struct peer_af *peer_af_find(struct peer *peer, afi_t afi, safi_t safi);
 extern int peer_af_delete(struct peer *peer, afi_t afi, safi_t safi);
 
-extern void bgp_shutdown_enable(struct bgp *bgp, const char *msg);
+extern void bgp_shutdown_enable(struct bgp *bgp, const char *msg, bool send_notify);
 extern void bgp_shutdown_disable(struct bgp *bgp);
 
 extern void bgp_close(void);
@@ -3403,7 +3408,7 @@ extern int bgp_lookup_by_as_name_type(struct bgp **bgp_val, as_t *as, const char
 /* Hooks */
 DECLARE_HOOK(bgp_vrf_status_changed, (struct bgp *bgp, struct interface *ifp),
 	     (bgp, ifp));
-DECLARE_HOOK(peer_status_changed, (struct peer *peer), (peer));
+DECLARE_HOOK(peer_status_changed, (struct peer_connection *connection), (connection));
 DECLARE_HOOK(bgp_snmp_init_stats, (struct bgp *bgp), (bgp));
 DECLARE_HOOK(bgp_snmp_update_last_changed, (struct bgp *bgp), (bgp));
 DECLARE_HOOK(bgp_snmp_update_stats,

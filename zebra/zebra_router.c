@@ -100,37 +100,23 @@ struct route_table *zebra_router_find_table(struct zebra_vrf *zvrf,
 					    uint32_t tableid, afi_t afi,
 					    safi_t safi)
 {
-	struct zebra_router_table finder;
 	struct zebra_router_table *zrt;
 
-	memset(&finder, 0, sizeof(finder));
-	finder.afi = afi;
-	finder.safi = safi;
-	finder.tableid = tableid;
-	finder.ns_id = zvrf->zns->ns_id;
-	zrt = RB_FIND(zebra_router_table_head, &zrouter.tables, &finder);
-
+	zrt = zebra_router_find_zrt(zvrf, tableid, afi, safi);
 	if (zrt)
 		return zrt->table;
-	else
-		return NULL;
+
+	return NULL;
 }
 
 struct route_table *zebra_router_get_table(struct zebra_vrf *zvrf,
 					   uint32_t tableid, afi_t afi,
 					   safi_t safi)
 {
-	struct zebra_router_table finder;
 	struct zebra_router_table *zrt;
 	struct rib_table_info *info;
 
-	memset(&finder, 0, sizeof(finder));
-	finder.afi = afi;
-	finder.safi = safi;
-	finder.tableid = tableid;
-	finder.ns_id = zvrf->zns->ns_id;
-	zrt = RB_FIND(zebra_router_table_head, &zrouter.tables, &finder);
-
+	zrt = zebra_router_find_zrt(zvrf, tableid, afi, safi);
 	if (zrt)
 		return zrt->table;
 
@@ -204,27 +190,27 @@ static void zebra_router_free_table(struct zebra_router_table *zrt)
 void zebra_router_release_table(struct zebra_vrf *zvrf, uint32_t tableid,
 				afi_t afi, safi_t safi)
 {
-	struct zebra_router_table finder;
 	struct zebra_router_table *zrt;
 
-	memset(&finder, 0, sizeof(finder));
-	finder.afi = afi;
-	finder.safi = safi;
-	finder.tableid = tableid;
-	finder.ns_id = zvrf->zns->ns_id;
-	zrt = RB_FIND(zebra_router_table_head, &zrouter.tables, &finder);
-
-	if (!zrt)
-		return;
-
-	zebra_router_free_table(zrt);
+	zrt = zebra_router_find_zrt(zvrf, tableid, afi, safi);
+	if (zrt)
+		zebra_router_free_table(zrt);
 }
 
 uint32_t zebra_router_get_next_sequence(void)
 {
-	return 1
-	       + atomic_fetch_add_explicit(&zrouter.sequence_num, 1,
-					   memory_order_relaxed);
+	uint32_t seq;
+
+	/*
+	 * Never hand out 0. A route entry that was never sent to the
+	 * dataplane has sequence 0, and 0 also means "no old entry" in the
+	 * dplane context.
+	 */
+	do {
+		seq = 1 + atomic_fetch_add_explicit(&zrouter.sequence_num, 1, memory_order_relaxed);
+	} while (seq == 0);
+
+	return seq;
 }
 
 static inline unsigned int interface_hash_key(const void *arg)

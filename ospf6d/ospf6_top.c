@@ -569,7 +569,7 @@ void ospf6_delete(struct ospf6 **po)
 
 	ospf6_gr_helper_deinit(o);
 	if (!o->gr_info.prepare_in_progress)
-		ospf6_flush_self_originated_lsas_now(o);
+		ospf6_flush_self_originated_lsas_now(o, o->router_id);
 	XFREE(MTYPE_TMP, o->gr_info.exit_reason);
 	ospf6_disable(o);
 	ospf6_del(o);
@@ -833,19 +833,32 @@ static void ospf6_db_clear(struct ospf6 *ospf6)
 	ospf6_route_remove_all(ospf6->brouter_table);
 }
 
-static void ospf6_process_reset(struct ospf6 *ospf6)
+/*
+ * Reset the process, flushing the self-originated LSAs that were advertised
+ * under old_router_id. A router-id change has to flush the LSAs it already
+ * flooded under the previous value, because both the flush and the lookup
+ * that finds a previous LSA are keyed on the advertising router. Flushing
+ * after the new router-id is in place misses them and the neighbours keep
+ * them until MaxAge.
+ */
+void ospf6_process_reset_old_router_id(struct ospf6 *ospf6, in_addr_t old_router_id)
 {
 	struct interface *ifp;
 	struct vrf *vrf = vrf_lookup_by_id(ospf6->vrf_id);
 
 	ospf6_unset_all_aggr_flag(ospf6);
-	ospf6_flush_self_originated_lsas_now(ospf6);
+	ospf6_flush_self_originated_lsas_now(ospf6, old_router_id);
 	ospf6->inst_shutdown = 0;
 	ospf6_db_clear(ospf6);
 
 	ospf6_asbr_redistribute_reset(ospf6);
 	FOR_ALL_INTERFACES (vrf, ifp)
 		ospf6_interface_clear(ifp);
+}
+
+static void ospf6_process_reset(struct ospf6 *ospf6)
+{
+	ospf6_process_reset_old_router_id(ospf6, ospf6->router_id);
 }
 
 DEFPY (clear_router_ospf6,
@@ -887,6 +900,7 @@ DEFUN(ospf6_router_id,
 	int ret;
 	const char *router_id_str;
 	uint32_t router_id;
+	in_addr_t old_router_id = o->router_id;
 
 	argv_find(argv, argc, "A.B.C.D", &idx);
 	router_id_str = argv[idx]->arg;
@@ -900,7 +914,7 @@ DEFUN(ospf6_router_id,
 	o->router_id_static = router_id;
 
 	if (ospf6_router_id_update(o, false))
-		ospf6_process_reset(o);
+		ospf6_process_reset_old_router_id(o, old_router_id);
 	else
 		vty_out(vty,
 			"For this router-id change to take effect run the \"clear ipv6 ospf6 process\" command\n");
@@ -916,12 +930,13 @@ DEFUN(no_ospf6_router_id,
       V4NOTATION_STR)
 {
 	VTY_DECLVAR_CONTEXT(ospf6, o);
+	in_addr_t old_router_id = o->router_id;
 
 	o->router_id_static = 0;
 
 
 	if (ospf6_router_id_update(o, false))
-		ospf6_process_reset(o);
+		ospf6_process_reset_old_router_id(o, old_router_id);
 	else
 		vty_out(vty,
 			"For this router-id change to take effect run the \"clear ipv6 ospf6 process\" command\n");
@@ -932,7 +947,7 @@ DEFUN(no_ospf6_router_id,
 DEFUN (ospf6_log_adjacency_changes,
        ospf6_log_adjacency_changes_cmd,
        "log-adjacency-changes",
-       "Log changes in adjacency state\n")
+       LOG_ADJ_CHANGES_STR)
 {
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
 
@@ -944,7 +959,7 @@ DEFUN (ospf6_log_adjacency_changes,
 DEFUN (ospf6_log_adjacency_changes_detail,
        ospf6_log_adjacency_changes_detail_cmd,
        "log-adjacency-changes detail",
-       "Log changes in adjacency state\n"
+       LOG_ADJ_CHANGES_STR
        "Log all state changes\n")
 {
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
@@ -958,7 +973,7 @@ DEFUN (no_ospf6_log_adjacency_changes,
        no_ospf6_log_adjacency_changes_cmd,
        "no log-adjacency-changes",
        NO_STR
-       "Log changes in adjacency state\n")
+       LOG_ADJ_CHANGES_STR)
 {
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
 
@@ -971,7 +986,7 @@ DEFUN (no_ospf6_log_adjacency_changes_detail,
        no_ospf6_log_adjacency_changes_detail_cmd,
        "no log-adjacency-changes detail",
        NO_STR
-       "Log changes in adjacency state\n"
+       LOG_ADJ_CHANGES_STR
        "Log all state changes\n")
 {
 	VTY_DECLVAR_CONTEXT(ospf6, ospf6);
@@ -1061,7 +1076,7 @@ DEFUN (no_ospf6_timers_lsa,
 DEFUN (ospf6_distance,
        ospf6_distance_cmd,
        "distance (1-255)",
-       "Administrative distance\n"
+       DISTANCE_STR
        "OSPF6 Administrative distance\n")
 {
 	VTY_DECLVAR_CONTEXT(ospf6, o);
@@ -1080,7 +1095,7 @@ DEFUN (no_ospf6_distance,
        no_ospf6_distance_cmd,
        "no distance (1-255)",
        NO_STR
-       "Administrative distance\n"
+       DISTANCE_STR
        "OSPF6 Administrative distance\n")
 {
 	VTY_DECLVAR_CONTEXT(ospf6, o);
@@ -1095,7 +1110,7 @@ DEFUN (no_ospf6_distance,
 DEFUN (ospf6_distance_ospf6,
        ospf6_distance_ospf6_cmd,
        "distance ospf6 {intra-area (1-255)|inter-area (1-255)|external (1-255)}",
-       "Administrative distance\n"
+       DISTANCE_STR
        "OSPF6 administrative distance\n"
        "Intra-area routes\n"
        "Distance for intra-area routes\n"
@@ -1127,7 +1142,7 @@ DEFUN (no_ospf6_distance_ospf6,
        no_ospf6_distance_ospf6_cmd,
        "no distance ospf6 [{intra-area [(1-255)]|inter-area [(1-255)]|external [(1-255)]}]",
        NO_STR
-       "Administrative distance\n"
+       DISTANCE_STR
        "OSPF6 distance\n"
        "Intra-area routes\n"
        "Distance for intra-area routes\n"

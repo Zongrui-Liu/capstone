@@ -285,9 +285,6 @@ int zebra_evpn_del_macip_for_intf(struct interface *ifp,
 				  struct zebra_evpn *zevpn)
 {
 	struct connected *c = NULL;
-	struct ethaddr macaddr;
-
-	memcpy(&macaddr.octet, ifp->hw_addr, ETH_ALEN);
 
 	frr_each_safe (if_connected, ifp->connected, c) {
 		struct ipaddr ip;
@@ -365,10 +362,13 @@ static int ip_prefix_send_to_client(vrf_id_t vrf_id, struct prefix *p,
 	/* Write packet size. */
 	stream_putw_at(s, 0, stream_get_endp(s));
 
-	if (IS_ZEBRA_DEBUG_VXLAN)
-		zlog_debug("Send ip prefix %pFX %s on vrf %s", p,
-			   (cmd == ZEBRA_IP_PREFIX_ROUTE_ADD) ? "ADD" : "DEL",
-			   vrf_id_to_name(vrf_id));
+	if (IS_ZEBRA_DEBUG_VXLAN) {
+		struct zebra_vrf *zvrf = zebra_vrf_lookup_by_id(vrf_id);
+
+		zlog_debug("Send ip prefix (%s:%u:%u)%pFX %s", vrf_id_to_name(vrf_id), vrf_id,
+			   zvrf ? zvrf->table_id : 0, p,
+			   (cmd == ZEBRA_IP_PREFIX_ROUTE_ADD) ? "ADD" : "DEL");
+	}
 
 	frrtrace(3, frr_zebra, ip_prefix_send_to_client, vrf_id, cmd, p);
 	if (cmd == ZEBRA_IP_PREFIX_ROUTE_ADD)
@@ -383,9 +383,6 @@ int zebra_evpn_advertise_subnet(struct zebra_evpn *zevpn, struct interface *ifp,
 				int advertise)
 {
 	struct connected *c = NULL;
-	struct ethaddr macaddr;
-
-	memcpy(&macaddr.octet, ifp->hw_addr, ETH_ALEN);
 
 	frr_each (if_connected, ifp->connected, c) {
 		struct prefix p;
@@ -449,7 +446,7 @@ int zebra_evpn_gw_macip_del(struct interface *ifp, struct zebra_evpn *zevpn,
 		return 0;
 
 	/* mac entry should be present */
-	mac = zebra_evpn_mac_lookup(zevpn, &n->emac);
+	mac = n->mac;
 	if (!mac) {
 		if (IS_ZEBRA_DEBUG_VXLAN)
 			zlog_debug("MAC %pEA doesn't exist for neigh %pIA on VNI %u",
@@ -475,9 +472,8 @@ int zebra_evpn_gw_macip_del(struct interface *ifp, struct zebra_evpn *zevpn,
 	/* Delete this neighbor entry. */
 	zebra_evpn_neigh_del(zevpn, n);
 
-	/* see if the mac needs to be deleted as well*/
-	if (mac)
-		zebra_evpn_deref_ip2mac(zevpn, mac);
+	/* see if the mac needs to be deleted as well */
+	zebra_evpn_deref_ip2mac(zevpn, mac);
 
 	return 0;
 }

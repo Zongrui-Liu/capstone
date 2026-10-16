@@ -58,14 +58,6 @@ static int gm_join_sock(const char *ifname, ifindex_t ifindex,
 			pim_addr group_addr, pim_addr source_addr,
 			struct pim_interface *pim_ifp);
 
-void pim_if_init(struct pim_instance *pim)
-{
-	int i;
-
-	for (i = 0; i < MAXVIFS; i++)
-		pim->iface_vif_index[i] = 0;
-}
-
 void pim_if_terminate(struct pim_instance *pim)
 {
 	struct interface *ifp;
@@ -193,7 +185,6 @@ struct pim_interface *pim_if_new(struct interface *ifp, bool gm, bool pim,
 	pim_sock_reset(ifp);
 
 	pim_if_add_vif(ifp, ispimreg, is_vxlan_term);
-	pim_ifp->pim->mcast_if_count++;
 
 	pim_filter_ref_init(&pim_ifp->gmp_filter);
 	pim_filter_ref_init(&pim_ifp->gm_proxy_filter);
@@ -208,8 +199,6 @@ void pim_if_delete(struct interface *ifp)
 	assert(ifp);
 	pim_ifp = ifp->info;
 	assert(pim_ifp);
-
-	pim_ifp->pim->mcast_if_count--;
 
 	pim_upstream_rpf_interface_del(ifp);
 
@@ -1030,11 +1019,12 @@ pim_addr pim_find_primary_addr(struct interface *ifp)
 #endif
 }
 
-static int pim_iface_next_vif_index(struct interface *ifp)
+static ifindex_t pim_iface_next_vif_index(struct interface *ifp)
 {
 	struct pim_interface *pim_ifp = ifp->info;
 	struct pim_instance *pim = pim_ifp->pim;
-	int i;
+	struct pim_multicast_if *mif;
+	ifindex_t index;
 
 	/*
 	 * The pimreg vif is always going to be in index 0
@@ -1043,11 +1033,29 @@ static int pim_iface_next_vif_index(struct interface *ifp)
 	if (ifp->ifindex == PIM_OIF_PIM_REGISTER_VIF)
 		return 0;
 
-	for (i = 1; i < MAXVIFS; i++) {
-		if (pim->iface_vif_index[i] == 0)
-			return i;
+	/* Look for holes in the list or return the next highest number. */
+	index = 1;
+	frr_each (multicast_interface_list, &pim->mif_list, mif) {
+		/*
+		 * Index is less than the minimum, just skip it
+		 * (e.g. pimreg).
+		 */
+		if (mif->index < index)
+			continue;
+		/* Index points to already existing interface, go to the next one. */
+		if (mif->index == index) {
+			index++;
+			continue;
+		}
+
+		/* Found the hole */
+		break;
 	}
-	return MAXVIFS;
+
+	if (index >= MAXVIFS)
+		return -1;
+
+	return index;
 }
 
 /*
@@ -1095,7 +1103,7 @@ int pim_if_add_vif(struct interface *ifp, bool ispimreg, bool is_vxlan_term)
 
 	pim_ifp->mroute_vif_index = pim_iface_next_vif_index(ifp);
 
-	if (pim_ifp->mroute_vif_index >= MAXVIFS) {
+	if (pim_ifp->mroute_vif_index == -1) {
 		zlog_warn(
 			"%s: Attempting to configure more than MAXVIFS=%d on pim enabled interface %s",
 			__func__, MAXVIFS, ifp->name);
@@ -1114,7 +1122,7 @@ int pim_if_add_vif(struct interface *ifp, bool ispimreg, bool is_vxlan_term)
 		return -5;
 	}
 
-	pim_ifp->pim->iface_vif_index[pim_ifp->mroute_vif_index] = 1;
+	pim_instance_mif_add(pim_ifp->pim, pim_ifp->mroute_vif_index);
 
 	if (!ispimreg)
 		gm_ifp_update(ifp);
@@ -1134,9 +1142,18 @@ int pim_if_del_vif(struct interface *ifp)
 	pim_upstream_rpf_interface_del(ifp);
 
 	if (pim_ifp->mroute_vif_index < 1) {
-		zlog_warn("%s: vif_index=%d < 1 on interface %s ifindex=%d",
-			  __func__, pim_ifp->mroute_vif_index, ifp->name,
-			  ifp->ifindex);
+		/*
+		 * Nothing to delete. The interface never got a vif (it has no
+		 * usable address or never came up), or it already lost it when
+		 * it went down or was removed from the kernel. pimreg always
+		 * uses vif 0 and is left to the kernel, which removes it with
+		 * the other vifs when the mroute socket is closed. This is
+		 * routine (e.g. for every such interface at shutdown), so don't
+		 * warn.
+		 */
+		if (PIM_DEBUG_ZEBRA)
+			zlog_debug("%s: no vif to delete on interface %s (vif_index=%d ifindex=%d)",
+				   __func__, ifp->name, pim_ifp->mroute_vif_index, ifp->ifindex);
 		return -1;
 	}
 
@@ -1151,10 +1168,7 @@ int pim_if_del_vif(struct interface *ifp)
 
 	pim_mroute_del_vif(ifp);
 
-	/*
-	  Update vif_index
-	 */
-	pim_ifp->pim->iface_vif_index[pim_ifp->mroute_vif_index] = 0;
+	pim_instance_mif_delete(pim_ifp->pim, pim_ifp->mroute_vif_index);
 
 	pim_ifp->mroute_vif_index = -1;
 	return 0;
@@ -1273,7 +1287,7 @@ int pim_if_jp_hold(const struct pim_interface *pim_interface)
 struct pim_neighbor *pim_if_find_neighbor(struct interface *ifp, pim_addr addr)
 {
 	struct listnode *neighnode;
-	struct pim_neighbor *neigh;
+	struct pim_neighbor *neigh, *second_neigh = NULL;
 	struct pim_interface *pim_ifp;
 	struct prefix p;
 
@@ -1288,24 +1302,36 @@ struct pim_neighbor *pim_if_find_neighbor(struct interface *ifp, pim_addr addr)
 
 	pim_addr_to_prefix(&p, addr);
 
+	/*
+	 * The goal here should always to prefer the primary address
+	 * if one matches, else choose a secondary
+	 */
 	for (ALL_LIST_ELEMENTS_RO(pim_ifp->pim_neighbor_list, neighnode,
 				  neigh)) {
 
-		/* primary address ? */
+		/*
+		 * If we find a primary address that matches, stop looking
+		 * for the primary address
+		 */
 		if (!pim_addr_cmp(neigh->source_addr, addr))
 			return neigh;
 
-		/* secondary address ? */
-		if (pim_neighbor_find_secondary(neigh, &p))
-			return neigh;
+		/*
+		 * Find the first secondary address that matches this
+		 * address.
+		 */
+		if (!second_neigh && pim_neighbor_find_secondary(neigh, &p)) {
+			second_neigh = neigh;
+			continue;
+		}
 	}
 
-	if (PIM_DEBUG_PIM_TRACE)
+	if (PIM_DEBUG_PIM_TRACE && !second_neigh)
 		zlog_debug(
 			"%s: neighbor not found for address %pPA on interface %s",
 			__func__, &addr, ifp->name);
 
-	return NULL;
+	return second_neigh;
 }
 
 long pim_if_t_suppressed_msec(struct interface *ifp)
@@ -1985,14 +2011,6 @@ struct prefix *pim_if_connected_to_source(struct interface *ifp, pim_addr src)
 	return NULL;
 }
 
-bool pim_if_is_vrf_device(struct interface *ifp)
-{
-	if (if_is_vrf(ifp))
-		return true;
-
-	return false;
-}
-
 int pim_if_ifchannel_count(struct pim_interface *pim_ifp)
 {
 	struct pim_ifchannel *ch;
@@ -2055,7 +2073,7 @@ static int pim_ifp_create(struct interface *ifp)
 	 * to incoming pim messages irrelevant if the user has configured us
 	 * for pim or not.
 	 */
-	if (pim_if_is_vrf_device(ifp)) {
+	if (if_is_vrf(ifp)) {
 		struct pim_interface *pim_ifp;
 
 		if (!ifp->info) {
@@ -2069,7 +2087,7 @@ static int pim_ifp_create(struct interface *ifp)
 
 	if (!strncmp(ifp->name, PIM_VXLAN_TERM_DEV_NAME,
 		     sizeof(PIM_VXLAN_TERM_DEV_NAME))) {
-		if (pim->mcast_if_count < MAXVIFS)
+		if (multicast_interface_list_count(&pim->mif_list) < MAXVIFS)
 			pim_vxlan_add_term_dev(pim, ifp);
 		else
 			zlog_warn(

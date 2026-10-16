@@ -20,6 +20,21 @@ struct bgp_nexthop_cache;
 struct bgp_route_evpn;
 struct bgp_unreach_nlri;
 
+/*
+ * VRF name, id, and kernel table id for debug output of the form
+ * (%s:%u:%u)%pBD. Call only from a debug path: resolving the VRF walks
+ * the VRF hash. BGP views have no VRF; the printable instance name is
+ * used and the table id is 0.
+ */
+struct bgp_debug_vrf {
+	const char *name;
+	vrf_id_t id;
+	uint32_t table_id;
+};
+
+extern struct bgp_debug_vrf bgp_debug_vrf_get(struct bgp *bgp);
+extern struct bgp_debug_vrf bgp_dest_debug_vrf(struct bgp_dest *dest);
+
 enum bgp_show_type {
 	bgp_show_type_normal,
 	bgp_show_type_regexp,
@@ -373,7 +388,6 @@ struct bgp_path_info {
  * the actual ecmp path.
  */
 #define BGP_PATH_MULTIPATH_NEW (1 << 20)
-#define BGP_PATH_LOCAL_IMPORT_EVPN_RT2_MACIP (1 << 21)
 #define BGP_PATH_UPA                                                                              \
 	(1 << 22) /* Route has UPA marking (locally originated or received with UPA ExtCom) */
 #define BGP_PATH_UPA_DROP (1 << 23) /* UPA route has D-bit set (drop/blackhole) */
@@ -691,8 +705,7 @@ static inline int bgp_fibupd_safi(safi_t safi)
 }
 
 /* Flag if the route path's family matches params. */
-static inline bool is_pi_family_matching(struct bgp_path_info *pi,
-					 afi_t afi, safi_t safi)
+static inline bool is_pi_family_matching(const struct bgp_path_info *pi, afi_t afi, safi_t safi)
 {
 	struct bgp_table *table;
 	struct bgp_dest *dest;

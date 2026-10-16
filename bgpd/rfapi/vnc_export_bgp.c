@@ -168,7 +168,7 @@ void vnc_direct_bgp_add_route_ce(struct bgp *bgp, struct agg_node *rn,
 	struct peer *peer = bpi->peer;
 	const struct prefix *prefix = agg_node_get_prefix(rn);
 	afi_t afi = family2afi(prefix->family);
-	struct bgp_dest *udest;
+	struct bgp_dest *udest BGP_DEST_AUTOUNLOCK = NULL;
 	struct bgp_path_info *ubpi;
 	struct attr hattr;
 	struct attr *iattr;
@@ -258,10 +258,8 @@ void vnc_direct_bgp_add_route_ce(struct bgp *bgp, struct agg_node *rn,
 		    && ubpi->sub_type == BGP_ROUTE_REDISTRIBUTE
 		    && ubpi->peer == peer
 		    && prefix_same(&unicast_nexthop, &ce_nexthop)) {
-
-			vnc_zlog_debug_verbose(
-				"%s: already have matching exported unicast route, skipping",
-				__func__);
+			vnc_zlog_debug_verbose("%s: already have matching exported unicast route, skipping",
+					       __func__);
 			return;
 		}
 	}
@@ -426,8 +424,12 @@ static void vnc_direct_bgp_vpn_enable_ce(struct bgp *bgp, afi_t afi)
 		if (!rn->info)
 			continue;
 
-		vnc_zlog_debug_verbose("%s: checking prefix %pRN", __func__,
-				       rn);
+		if (VNC_DEBUG(VERBOSE)) {
+			struct bgp_debug_vrf dv = bgp_debug_vrf_get(bgp);
+
+			zlog_debug("%s: checking prefix (%s:%u:%u)%pRN", __func__, dv.name, dv.id,
+				   dv.table_id, rn);
+		}
 
 		for (ri = rn->info; ri; ri = ri->next) {
 
@@ -1836,8 +1838,12 @@ void vnc_direct_bgp_rh_vpn_enable(struct bgp *bgp, afi_t afi)
 			if (!bgp_dest_has_bgp_path_info_data(dest))
 				continue;
 
-			vnc_zlog_debug_verbose("%s: checking prefix %pBD",
-					       __func__, dest);
+			if (VNC_DEBUG(VERBOSE)) {
+				struct bgp_debug_vrf dv = bgp_dest_debug_vrf(dest);
+
+				zlog_debug("%s: checking prefix (%s:%u:%u)%pBD", __func__,
+					   dv.name, dv.id, dv.table_id, dest);
+			}
 
 			dest_p = bgp_dest_get_prefix(dest);
 

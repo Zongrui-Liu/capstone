@@ -44,6 +44,8 @@ static void ptm_sbfd_echo_xmt_TO(struct bfd_session *bfd);
 static void sbfd_down_handler(struct bfd_session *bs, int nstate);
 static void sbfd_up_handler(struct bfd_session *bs, int nstate);
 
+static bool bfd_vrf_is_perm(const char *vrf_name);
+
 /**
  * Remove BFD profile from all BFD sessions so we don't leave dangling
  * pointers.
@@ -91,6 +93,7 @@ static void bfd_profile_set_default(struct bfd_profile *bp)
 	bp->admin_shutdown = false;
 	bp->detection_multiplier = BFD_DEFDETECTMULT;
 	bp->echo_mode = false;
+	bp->demand_mode = false;
 	bp->passive = false;
 	bp->log_session_changes = false;
 	bp->minimum_ttl = BFD_DEF_MHOP_TTL;
@@ -227,6 +230,12 @@ void bfd_session_apply(struct bfd_session *bs)
 			bs->mh_ttl = bs->peer_profile.minimum_ttl;
 	}
 
+	/* Toggle 'demand-mode' if default value. */
+	if (bs->peer_profile.demand_mode == false)
+		bfd_set_demand(bs, bp->demand_mode);
+	else
+		bfd_set_demand(bs, bs->peer_profile.demand_mode);
+
 	/* Toggle 'passive-mode' if default value. */
 	if (bs->bfd_mode == BFD_MODE_TYPE_BFD) {
 		if (bs->peer_profile.passive == false)
@@ -256,14 +265,17 @@ void bfd_session_apply(struct bfd_session *bs)
 	else if (bs->profile && bs->profile->auth_config.key_chain_name[0] != '\0')
 		bs->kc = keychain_lookup(bs->profile->auth_config.key_chain_name);
 
-	if (bs->peer_profile.auth_config.meticulous ||
-	    (bs->profile && bs->profile->auth_config.meticulous)) {
-		bs->auth_meticulous = true;
-		bs->auth_seq_num_update_modulo = AUTH_SEQ_NUM_MODULO_METICULOUS;
-	} else {
-		bs->auth_meticulous = false;
-		bs->auth_seq_num_update_modulo = AUTH_SEQ_NUM_MODULO;
-	}
+	bs->auth_meticulous = bs->peer_profile.auth_config.meticulous ||
+			      (bs->profile && bs->profile->auth_config.meticulous);
+
+	/*
+	 * Warn here rather than per packet. A keychain that holds nothing
+	 * this session can use now keeps the session down instead of
+	 * quietly running it unauthenticated, so say which keychain it was.
+	 */
+	if (bs->kc && !bfd_keychain_key_find_active(bs->kc, bs->auth_meticulous))
+		zlog_warn("BFD: session [%s] has keychain %s but no key it can use; the session will not authenticate",
+			  bs_to_string(bs), bs->kc->name);
 
 	/* If session interval changed negotiate new timers. */
 	if (bs->ses_state == PTM_BFD_UP &&
@@ -455,6 +467,14 @@ int bfd_session_enable(struct bfd_session *bs)
 		if (bvrf->bg_session_count == 0)
 			bfd_vrf_start_sockets(bvrf);
 		bvrf->bg_session_count++;
+		/*
+		 * Echo set before the VRF was known opened no echo socket.
+		 * Only where bfd_vrf_start_sockets would open sockets: not
+		 * with a data plane, and not in a VRF left out of --vrfs.
+		 */
+		if (CHECK_FLAG(bs->flags, BFD_SESS_FLAG_ECHO) && !bglobal.bg_use_dplane &&
+		    bfd_vrf_is_perm(bvrf->vrf->name))
+			bfd_vrf_toggle_echo(bvrf);
 	}
 
 	/* Only start timers if we are using active mode. */
@@ -652,6 +672,8 @@ struct key *bfd_keychain_key_find_active(const struct keychain *keychain, bool m
 	now_sec = now_ts.tv_sec; /* Use seconds part for comparison with time_t lifetimes */
 
 	for (ALL_LIST_ELEMENTS_RO(keychain->key, node, key)) {
+		size_t keylen, maxlen;
+
 		if (meticulous && key->hash_algo != KEYCHAIN_ALGO_HMAC_SHA1)
 			continue;
 		if (key->hash_algo != KEYCHAIN_ALGO_CLEARTEXT &&
@@ -659,9 +681,18 @@ struct key *bfd_keychain_key_find_active(const struct keychain *keychain, bool m
 			continue;
 		if (!key->string)
 			continue;
-		if (strlen(key->string) < BFD_AUTH_SIMPLE_PASSWD_MIN_LEN)
-			continue;
-		if (strlen(key->string) > BFD_AUTH_SIMPLE_PASSWD_MAX_LEN)
+
+		/*
+		 * RFC 5880 Section 6.7.2 bounds a simple password at 16 bytes,
+		 * Section 6.7.4 a keyed SHA1 key at 20. The keyed SHA1 section
+		 * is 28 bytes whatever the key length, so the longer key does
+		 * not grow the packet.
+		 */
+		maxlen = key->hash_algo == KEYCHAIN_ALGO_HMAC_SHA1
+				 ? BFD_AUTH_SHA1_KEY_MAX_LEN
+				 : BFD_AUTH_SIMPLE_PASSWD_MAX_LEN;
+		keylen = strlen(key->string);
+		if (keylen < BFD_AUTH_SIMPLE_PASSWD_MIN_LEN || keylen > maxlen)
 			continue;
 		if (key->send.start == 0 || /* Always valid if start is 0 */
 		    (key->send.start <= now_sec &&
@@ -673,6 +704,22 @@ struct key *bfd_keychain_key_find_active(const struct keychain *keychain, bool m
 
 void ptm_bfd_xmt_TO(struct bfd_session *bfd, int fbit)
 {
+	/*
+	 * Periodic transmission ceases while the peer has requested
+	 * Demand mode, both systems are Up and no Poll Sequence is
+	 * in progress.
+	 *
+	 * The timer keeps running so that transmission resumes on
+	 * its own once any of those stop holding.
+	 *
+	 * RFC 5880, Section 6.8.7.
+	 */
+	if (bfd->remote_demand_mode && bfd->ses_state == PTM_BFD_UP &&
+	    bfd->remote_ses_state == PTM_BFD_UP && !bfd->polling && !fbit) {
+		ptm_bfd_start_xmt_timer(bfd, false);
+		return;
+	}
+
 	/* Send the scheduled control packet */
 	ptm_bfd_snd(bfd, fbit);
 
@@ -781,7 +828,8 @@ void ptm_bfd_sess_dn(struct bfd_session *bfd, uint8_t diag, bool notify_admin_do
 	bfd->discrs.remote_discr = 0;
 	bfd->ses_state = PTM_BFD_DOWN;
 	bfd->polling = 0;
-	bfd->demand_mode = 0;
+	bfd->remote_ses_state = PTM_BFD_ADM_DOWN;
+	bfd->remote_demand_mode = 0;
 	monotime(&bfd->downtime);
 
 	/*
@@ -877,7 +925,8 @@ void ptm_sbfd_init_sess_dn(struct bfd_session *bfd, uint8_t diag)
 	bfd->local_diag = diag;
 	bfd->ses_state = PTM_BFD_DOWN;
 	bfd->polling = 0;
-	bfd->demand_mode = 0;
+	bfd->remote_ses_state = PTM_BFD_ADM_DOWN;
+	bfd->remote_demand_mode = 0;
 	monotime(&bfd->downtime);
 
 	/*
@@ -927,7 +976,8 @@ void ptm_sbfd_echo_sess_dn(struct bfd_session *bfd, uint8_t diag)
 	bfd->discrs.remote_discr = 0;
 	bfd->ses_state = PTM_BFD_DOWN;
 	bfd->polling = 0;
-	bfd->demand_mode = 0;
+	bfd->remote_ses_state = PTM_BFD_ADM_DOWN;
+	bfd->remote_demand_mode = 0;
 	monotime(&bfd->downtime);
 	/* only signal clients when going from up->down state */
 	if (old_state == PTM_BFD_UP)
@@ -1019,6 +1069,18 @@ void bfd_recvtimer_cb(struct event *t)
 	case PTM_BFD_UP:
 		ptm_bfd_sess_dn(bs, BD_CONTROL_EXPIRED, false);
 		break;
+	case PTM_BFD_DOWN:
+		/*
+		 * RFC 5880, Section 6.8.1: bfd.RemoteDiscr is set to zero once
+		 * a Detection Time passes without a valid packet. A packet the
+		 * peer sent while we were already Down (AdminDown, kept up for
+		 * a Detection Time as Section 6.8.16 recommends) sets it again,
+		 * and nothing else clears it. If the peer then comes back with
+		 * a new discriminator, it discards everything we send, and a
+		 * passive peer never speaks first.
+		 */
+		bs->discrs.remote_discr = 0;
+		break;
 	}
 }
 
@@ -1099,6 +1161,7 @@ struct bfd_session *bfd_session_new(enum bfd_mode_type mode)
 	/* RFC 5880, Section 6.7.3: unpredictable initial sequence number */
 	bs->auth_seq_num = frr_weak_random();
 	bs->auth_last_rx_seq_num = 0;
+	bs->auth_seq_known = false;
 	bs->auth_meticulous = false;
 	bs_set_slow_timers(bs);
 
@@ -1359,6 +1422,18 @@ void bfd_set_polling(struct bfd_session *bs)
 		zlog_debug("[%s] Setting polling=1 to negotiate timer change", bs_to_string(bs));
 
 	bs->polling = 1;
+
+	/*
+	 * In demand mode the peer is not transmitting, so the Poll
+	 * Sequence is the only way to verify the path. Arm the
+	 * detection timer so a lost Final brings the session down
+	 * instead of leaving the poll outstanding forever.
+	 *
+	 * RFC 5880, Section 6.6.
+	 */
+	if (CHECK_FLAG(bs->flags, BFD_SESS_FLAG_DEMAND) && bs->ses_state == PTM_BFD_UP &&
+	    bs->remote_ses_state == PTM_BFD_UP)
+		bfd_recvtimer_update(bs);
 }
 
 /*
@@ -1669,15 +1744,6 @@ void bs_final_handler(struct bfd_session *bs)
 	bs->cur_timers.required_min_rx = bs->timers.required_min_rx;
 
 	/*
-	 * TODO: demand mode. See RFC 5880 Section 6.1.
-	 *
-	 * When using demand mode we must disable the detection timer
-	 * for lost control packets.
-	 */
-	if (bs->demand_mode)
-		return;
-
-	/*
 	 * Calculate transmission time based on new timers.
 	 *
 	 * Transmission calculation:
@@ -1843,6 +1909,49 @@ void bfd_set_shutdown(struct bfd_session *bs, bool shutdown)
 			bfd_xmttimer_update(bs, bs->xmt_TO);
 		}
 	}
+}
+
+void bfd_set_demand(struct bfd_session *bs, bool demand)
+{
+	if (demand) {
+		if (CHECK_FLAG(bs->flags, BFD_SESS_FLAG_DEMAND))
+			return;
+
+		SET_FLAG(bs->flags, BFD_SESS_FLAG_DEMAND);
+
+		/*
+		 * Stop the detection timer here rather than waiting for
+		 * the next packet: the peer ceases as soon as it sees
+		 * the Demand bit, so there may be no further packet to
+		 * take the receive path.
+		 */
+		if (bs->ses_state == PTM_BFD_UP && bs->remote_ses_state == PTM_BFD_UP)
+			bfd_recvtimer_delete(bs);
+
+		return;
+	}
+
+	if (!CHECK_FLAG(bs->flags, BFD_SESS_FLAG_DEMAND))
+		return;
+
+	UNSET_FLAG(bs->flags, BFD_SESS_FLAG_DEMAND);
+
+	if (bs->ses_state != PTM_BFD_UP)
+		return;
+
+	/*
+	 * Leaving demand mode must restore failure detection without
+	 * waiting for the peer. The detection timer was removed while
+	 * demand mode was active, and if the path is already down no
+	 * packet will arrive to re-arm it.
+	 *
+	 * The peer may still be demanding, in which case our own
+	 * transmission is suppressed and it would never learn that our
+	 * Demand bit is gone. A Poll Sequence is exempt from that
+	 * suppression, so it is what carries the change across.
+	 */
+	bfd_set_polling(bs);
+	bfd_recvtimer_update(bs);
 }
 
 void bfd_set_passive_mode(struct bfd_session *bs, bool passive)

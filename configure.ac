@@ -7,7 +7,7 @@
 ##
 AC_PREREQ([2.69])
 
-AC_INIT([frr], [10.8.0-dev], [https://github.com/frrouting/frr/issues])
+AC_INIT([frr], [10.9.0-dev], [https://github.com/frrouting/frr/issues])
 PACKAGE_URL="https://frrouting.org/"
 AC_SUBST([PACKAGE_URL])
 PACKAGE_FULLNAME="FRRouting"
@@ -235,7 +235,7 @@ AC_ARG_ENABLE(tcmalloc,
 	AS_HELP_STRING([--enable-tcmalloc], [Turn on tcmalloc]),
 [case "${enableval}" in
   yes) tcmalloc_enabled=true
-LIBS="$LIBS -ltcmalloc_minimal"
+LIBS="$LIBS -Wl,--push-state,--no-as-needed,-ltcmalloc_minimal,--pop-state"
  ;;
   no)  tcmalloc_enabled=false ;;
   *) AC_MSG_ERROR([bad value ${enableval} for --enable-tcmalloc]) ;;
@@ -872,7 +872,7 @@ AC_ARG_ENABLE(gperf-tcmalloc,
   AC_MSG_CHECKING([for gperftools tcmalloc])
   AC_CHECK_LIB([tcmalloc], [MallocExtension_ReleaseToSystem], [
 gperf_tcmalloc_enabled=true
-LIBS="$LIBS -ltcmalloc"
+LIBS="$LIBS -Wl,--push-state,--no-as-needed,-ltcmalloc,--pop-state"
 AC_DEFINE([HAVE_TCMALLOC], [1], [Enable tcmalloc])
   ], [AC_MSG_ERROR([tcmalloc specified but libtcmalloc not found, or missing apis])])
  ;;
@@ -2846,7 +2846,7 @@ AC_CONFIG_FILES([tools/frrinit.sh], [chmod +x tools/frrinit.sh])
 AC_CONFIG_FILES([tools/frrcommon.sh])
 AC_CONFIG_FILES([tools/frr.service])
 AC_CONFIG_FILES([tools/frr@.service])
-AC_CONFIG_FILES([tools/frr.pc])
+AC_CONFIG_FILES([frr.pc], [ln -sf ../frr.pc tools/frr.pc])
 
 # dnl write out a ccls file with our compile configuration
 # dnl have to add -Wno-unused-function otherwise foobar_cmd_magic causes

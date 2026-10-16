@@ -425,7 +425,7 @@ extern void rib_delete(afi_t afi, safi_t safi, vrf_id_t vrf_id, int type,
 extern struct route_entry *rib_match(afi_t afi, safi_t safi, vrf_id_t vrf_id,
 				     const union g_addr *addr, struct route_node **rn_out);
 
-extern void rib_update(enum rib_update_event event);
+extern void rib_update(enum rib_update_event event, int type);
 extern void rib_update_table(struct route_table *table,
 			     enum rib_update_event event, int rtype);
 extern void rib_sweep_route(struct event *t);
@@ -631,6 +631,10 @@ extern void rib_add_finished_startup(void);
 extern void zebra_vty_init(void);
 extern uint32_t zebra_rib_dplane_results_count(void);
 extern uint32_t zebra_rib_dplane_results_max(void);
+#ifdef DEV_BUILD
+extern void zebra_rib_dplane_results_plug(void);
+extern void zebra_rib_dplane_results_unplug(void);
+#endif
 
 extern pid_t zebra_pid;
 

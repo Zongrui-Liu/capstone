@@ -1486,7 +1486,7 @@ static void zebra_evpn_nhg_update(struct zebra_evpn_es *es)
 				   es->nhg_id, nh_str);
 		}
 
-		kernel_upd_mac_nhg(es->nhg_id, nh_cnt, nh_ids);
+		dplane_nhg_fdb_add(es->nhg_id, nh_cnt, nh_ids);
 		if (!(es->flags & ZEBRA_EVPNES_NHG_ACTIVE)) {
 			es->flags |= ZEBRA_EVPNES_NHG_ACTIVE;
 			/* add backup NHG to the br-port */
@@ -1506,7 +1506,7 @@ static void zebra_evpn_nhg_update(struct zebra_evpn_es *es)
 				zebra_evpn_es_br_port_dplane_update(es,
 								    __func__);
 			zebra_evpn_nhg_mac_update(es);
-			kernel_del_mac_nhg(es->nhg_id);
+			dplane_nh_fdb_del(es->nhg_id);
 		}
 	}
 
@@ -1523,6 +1523,8 @@ static void zebra_evpn_es_l2_nh_show_entry(struct zebra_evpn_l2_nh *nh,
 		json_object_string_addf(json, "vtep", "%pIA", &nh->vtep_ip);
 		json_object_int_add(json, "nhId", nh->nh_id);
 		json_object_int_add(json, "refCnt", nh->ref_cnt);
+		json_object_boolean_add(json, "installed",
+					!!(nh->flags & ZEBRA_EVPN_L2_NH_INSTALLED));
 
 		json_object_array_add(json_array, json);
 	} else {
@@ -1559,7 +1561,7 @@ void zebra_evpn_l2_nh_show(struct vty *vty, bool uj)
 		vty_json(vty, json_array);
 }
 
-static struct zebra_evpn_l2_nh *zebra_evpn_l2_nh_find(struct ipaddr *vtep_ip)
+static struct zebra_evpn_l2_nh *zebra_evpn_l2_nh_find(const struct ipaddr *vtep_ip)
 {
 	struct zebra_evpn_l2_nh *nh;
 	struct zebra_evpn_l2_nh tmp;
@@ -1586,7 +1588,7 @@ static struct zebra_evpn_l2_nh *zebra_evpn_l2_nh_alloc(struct ipaddr *vtep_ip)
 	}
 
 	/* install the NH in the dataplane */
-	kernel_upd_mac_nh(nh->nh_id, &nh->vtep_ip);
+	dplane_nh_fdb_add(nh->nh_id, &nh->vtep_ip);
 
 	return nh;
 }
@@ -1594,11 +1596,91 @@ static struct zebra_evpn_l2_nh *zebra_evpn_l2_nh_alloc(struct ipaddr *vtep_ip)
 static void zebra_evpn_l2_nh_free(struct zebra_evpn_l2_nh *nh)
 {
 	/* delete the NH from the dataplane */
-	kernel_del_mac_nh(nh->nh_id);
+	dplane_nh_fdb_del(nh->nh_id);
 
 	zebra_evpn_nhid_free(nh->nh_id, NULL);
 	hash_release(zmh_info->nh_ip_table, nh);
 	XFREE(MTYPE_L2_NH, nh);
+}
+
+/* Record the async result of a per-VTEP L2 NH install. */
+static void zebra_evpn_l2_nh_install_result(struct zebra_dplane_ctx *ctx, uint32_t id,
+					    enum zebra_dplane_result status)
+{
+	const struct ipaddr *vtep_ip = dplane_ctx_get_fdb_nh_vtep_ip(ctx);
+	struct zebra_evpn_l2_nh *nh;
+
+	nh = zebra_evpn_l2_nh_find(vtep_ip);
+	/* The NH may have been released - or replaced by a new NH for the same
+	 * VTEP - while this op was in flight; match on the id to be sure.
+	 */
+	if (!nh || nh->nh_id != id) {
+		if (IS_ZEBRA_DEBUG_EVPN_MH_NH)
+			zlog_debug("l2-nh %u (%pIA) install result %s: no longer present", id,
+				   vtep_ip, dplane_res2str(status));
+		return;
+	}
+
+	if (status == ZEBRA_DPLANE_REQUEST_SUCCESS) {
+		nh->flags |= ZEBRA_EVPN_L2_NH_INSTALLED;
+		return;
+	}
+
+	nh->flags &= ~ZEBRA_EVPN_L2_NH_INSTALLED;
+	flog_err(EC_ZEBRA_DP_INSTALL_FAIL,
+		 "Failed to install EVPN-MH L2 nexthop %u (%pIA) in the kernel", id, vtep_ip);
+}
+
+/* Record the async result of a per-ES NHG install. */
+static void zebra_evpn_nhg_install_result(uint32_t id, enum zebra_dplane_result status)
+{
+	struct zebra_evpn_es *es;
+
+	if (status == ZEBRA_DPLANE_REQUEST_SUCCESS)
+		return;
+
+	es = zebra_evpn_nhg_find(id);
+	if (es)
+		flog_err(EC_ZEBRA_DP_INSTALL_FAIL,
+			 "Failed to install EVPN-MH NHG %u for es %s in the kernel", id,
+			 es->esi_str);
+	else
+		flog_err(EC_ZEBRA_DP_INSTALL_FAIL,
+			 "Failed to install EVPN-MH NHG %u in the kernel", id);
+}
+
+/* Handle the dataplane result of an EVPN-MH FDB nexthop / nexthop-group
+ * install or delete: confirm the install state and flag failures.
+ */
+void zebra_evpn_l2_nh_dplane_result(struct zebra_dplane_ctx *ctx)
+{
+	enum dplane_op_e op = dplane_ctx_get_op(ctx);
+	enum zebra_dplane_result status = dplane_ctx_get_status(ctx);
+	uint32_t id = dplane_ctx_get_fdb_nh_id(ctx);
+
+	if (IS_ZEBRA_DEBUG_EVPN_MH_NH || IS_ZEBRA_DEBUG_DPLANE_DETAIL)
+		zlog_debug("EVPN-MH FDB nh dplane ctx %p op %s nh id %u result %s", ctx,
+			   dplane_op2str(op), id, dplane_res2str(status));
+
+	if (op == DPLANE_OP_NH_FDB_DELETE) {
+		/* The per-VTEP NH is freed (and the per-ES NHG may be
+		 * transitioning) by the time the delete result lands, so there
+		 * is nothing to update - just flag a failure.
+		 */
+		if (status != ZEBRA_DPLANE_REQUEST_SUCCESS)
+			flog_err(EC_ZEBRA_DP_DELETE_FAIL,
+				 "Failed to uninstall EVPN-MH FDB nexthop ID (%u) from the kernel",
+				 id);
+		return;
+	}
+
+	/* Install/update: a group op (grp_count > 0) targets a per-ES NHG,
+	 * otherwise it is a per-VTEP L2 NH.
+	 */
+	if (dplane_ctx_get_fdb_nh_grp_count(ctx) > 0)
+		zebra_evpn_nhg_install_result(id, status);
+	else
+		zebra_evpn_l2_nh_install_result(ctx, id, status);
 }
 
 static void zebra_evpn_l2_nh_es_vtep_ref(struct zebra_evpn_es_vtep *es_vtep)
@@ -2115,7 +2197,7 @@ static void zebra_evpn_es_free(struct zebra_evpn_es **esp)
 	/* If the NHG is still installed uninstall it and free the id */
 	if (es->flags & ZEBRA_EVPNES_NHG_ACTIVE) {
 		es->flags &= ~ZEBRA_EVPNES_NHG_ACTIVE;
-		kernel_del_mac_nhg(es->nhg_id);
+		dplane_nh_fdb_del(es->nhg_id);
 	}
 	zebra_evpn_nhid_free(es->nhg_id, es);
 
@@ -4052,16 +4134,23 @@ void zebra_evpn_proc_remote_nh(ZAPI_HANDLER_ARGS)
 
 	if (hdr->command == ZEBRA_EVPN_REMOTE_NH_ADD) {
 		stream_get(&rmac, s, sizeof(rmac));
-		if (IS_ZEBRA_DEBUG_EVPN_MH_ES)
-			zlog_debug(
-				"evpn remote nh %d %pIA rmac %pEA add pfx %pFX",
-				vrf_id, &nh, &rmac, &dummy_prefix);
+		if (IS_ZEBRA_DEBUG_EVPN_MH_ES) {
+			struct zebra_vrf *nh_zvrf = zebra_vrf_lookup_by_id(vrf_id);
+
+			zlog_debug("evpn remote nh %pIA rmac %pEA add (%s:%u:%u)%pFX", &nh, &rmac,
+				   zvrf_name(nh_zvrf), vrf_id, nh_zvrf ? nh_zvrf->table_id : 0,
+				   &dummy_prefix);
+		}
 		zebra_rib_queue_evpn_route_add(vrf_id, &rmac, &nh,
 					       (struct prefix *)&dummy_prefix);
 	} else {
-		if (IS_ZEBRA_DEBUG_EVPN_MH_ES)
-			zlog_debug("evpn remote nh %d %pIA del pfx %pFX",
-				   vrf_id, &nh, &dummy_prefix);
+		if (IS_ZEBRA_DEBUG_EVPN_MH_ES) {
+			struct zebra_vrf *nh_zvrf = zebra_vrf_lookup_by_id(vrf_id);
+
+			zlog_debug("evpn remote nh %pIA del (%s:%u:%u)%pFX", &nh,
+				   zvrf_name(nh_zvrf), vrf_id, nh_zvrf ? nh_zvrf->table_id : 0,
+				   &dummy_prefix);
+		}
 		zebra_rib_queue_evpn_route_del(vrf_id, &nh,
 					       (struct prefix *)&dummy_prefix);
 	}

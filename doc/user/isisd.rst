@@ -213,6 +213,13 @@ ISIS interface
    command :clicmd:`router isis WORD`). To enable IPv4, issue ``ip router isis
    WORD``; to enable IPv6, issue ``ipv6 router isis WORD``.
 
+BFD monitoring can be enabled for IS-IS adjacencies on an interface with
+:clicmd:`isis bfd`. BFD provides faster failure detection than the IS-IS hello
+timers. Use :clicmd:`isis bfd profile BFDPROF` to apply a BFD profile to these
+sessions.
+
+.. seealso:: :ref:`bfd-isis-peer-config`
+
 .. clicmd:: isis circuit-type [level-1 | level-1-2 | level-2]
 
    Configure circuit type for interface:
@@ -252,6 +259,10 @@ ISIS interface
    Set default metric value globally, for an area (level-1) or a domain
    (level-2).  Max value depend if metric support narrow or wide value (see
    command :clicmd:`metric-style [narrow | transition | wide]`).
+
+   With wide metrics, the maximum metric 16777215 (2^24 - 1) is still
+   advertised, but links advertised with it are ignored during the SPF
+   computation, as required by :rfc:`5305`.
 
 .. clicmd:: isis network point-to-point
 
@@ -429,9 +440,8 @@ Known limitations:
 .. clicmd:: segment-routing global-block (16-1048575) (16-1048575) [local-block (16-1048575) (16-1048575)]
 
    Set the Segment Routing Global Block i.e. the label range used by MPLS
-   to store label in the MPLS FIB for Prefix SID. Note that the block size
-   may not exceed 65535. Optionally sets also the Segment Routing Local Block.
-   The negative command always unsets both.
+   to store label in the MPLS FIB for Prefix SID. Optionally sets also the
+   Segment Routing Local Block. The negative command always unsets both.
 
 .. clicmd:: segment-routing node-msd (1-16)
 
@@ -439,7 +449,7 @@ Known limitations:
    MPLS dataplane. E.g. for Linux kernel, since version 4.13 the maximum value
    is 32.
 
-.. clicmd:: segment-routing prefix <A.B.C.D/M|X:X::X:X/M> [algorithm (128-255)] <absolute (16-1048575)|index (0-65535) [no-php-flag|explicit-null] [n-flag-clear]
+.. clicmd:: segment-routing prefix <A.B.C.D/M|X:X::X:X/M> [algorithm (128-255)] <absolute (16-1048575)|index (0-1048575) [no-php-flag|explicit-null] [n-flag-clear]
 
    prefix. The 'no-php-flag' means NO Penultimate Hop Popping that allows SR
    node to request to its neighbor to not pop the label. The 'explicit-null'

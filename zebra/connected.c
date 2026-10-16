@@ -206,18 +206,21 @@ static void connected_remove_kernel_for_connected(afi_t afi, safi_t safi, struct
 		return;
 
 	if (!prefix_same(&rn->p, p))
-		return;
+		goto done;
 
 	dest = rib_dest_from_rnode(rn);
 	if (!dest || !dest->selected_fib)
-		return;
+		goto done;
 
 	re = dest->selected_fib;
 	if (re->type != ZEBRA_ROUTE_KERNEL)
-		return;
+		goto done;
 
-	rib_delete(afi, SAFI_UNICAST, zvrf->vrf->vrf_id, ZEBRA_ROUTE_KERNEL, 0, 0, p, NULL, nh, 0,
-		   zvrf->table_id, 0, 0, false);
+	rib_delete(afi, SAFI_UNICAST, zvrf->vrf->vrf_id, ZEBRA_ROUTE_KERNEL, re->instance,
+		   re->flags, p, NULL, nh, 0, zvrf->table_id, re->metric, re->distance, false);
+
+done:
+	route_unlock_node(rn);
 }
 
 /* Called from if_up(). */
@@ -320,12 +323,35 @@ void connected_up(struct interface *ifp, struct connected *ifc)
 		prefix_copy(&cp, CONNECTED_PREFIX(c));
 		apply_mask(&cp);
 
-		if (prefix_same(&cp, &p) &&
-		    !CHECK_FLAG(c->conf, ZEBRA_IFC_DOWN))
+		if (prefix_same(&cp, &p) && !CHECK_FLAG(c->conf, ZEBRA_IFC_DOWN) &&
+		    !(CHECK_FLAG(c->flags, ZEBRA_IFA_TENTATIVE) ||
+		      CHECK_FLAG(c->flags, ZEBRA_IFA_DADFAILED)))
 			count++;
 
 		if (count >= 2)
 			return;
+	}
+
+	if (CHECK_FLAG(ifc->flags, ZEBRA_IFA_TENTATIVE) ||
+	    CHECK_FLAG(ifc->flags, ZEBRA_IFA_DADFAILED)) {
+		/*
+		 * So if we have a kernel route that would match this connected route
+		 * that we are deciding to not install at this point in time, let's just
+		 * go ahead and remove it now, we don't want upper level protocols to be
+		 * using it either since the prefix is still tentative.
+		 */
+		if (!CHECK_FLAG(ifc->flags, ZEBRA_IFA_NOPREFIXROUTE)) {
+			connected_remove_kernel_for_connected(afi, SAFI_UNICAST, zvrf, &p, &nh);
+			connected_remove_kernel_for_connected(afi, SAFI_MULTICAST, zvrf, &p, &nh);
+		}
+
+		if (IS_ZEBRA_DEBUG_KERNEL)
+			zlog_debug("interface %s (%s:%u:%u)%pFX is in %s%s state, not installing connected route",
+				   ifp->name, ifp->vrf->name, ifp->vrf->vrf_id, zvrf->table_id, &p,
+				   CHECK_FLAG(ifc->flags, ZEBRA_IFA_TENTATIVE) ? "tentative" : "",
+				   CHECK_FLAG(ifc->flags, ZEBRA_IFA_DADFAILED) ? " DAD failed"
+									       : "");
+		return;
 	}
 
 	if (!CHECK_FLAG(ifc->flags, ZEBRA_IFA_NOPREFIXROUTE)) {
@@ -349,9 +375,9 @@ void connected_up(struct interface *ifp, struct connected *ifc)
 	/* Schedule LSP forwarding entries for processing, if appropriate. */
 	if (zvrf->vrf->vrf_id == VRF_DEFAULT) {
 		if (IS_ZEBRA_DEBUG_MPLS)
-			zlog_debug(
-				"%u: IF %s IP %pFX address add/up, scheduling MPLS processing",
-				zvrf->vrf->vrf_id, ifp->name, &p);
+			zlog_debug("IF %s (%s:%u:%u)%pFX address add/up, scheduling MPLS processing",
+				   ifp->name, zvrf->vrf->name, zvrf->vrf->vrf_id, zvrf->table_id,
+				   &p);
 		mpls_mark_lsps_for_processing(zvrf, &p);
 	}
 }
@@ -460,8 +486,8 @@ void connected_down(struct interface *ifp, struct connected *ifc)
 	 */
 	if (CHECK_FLAG(ifc->conf, ZEBRA_IFC_DOWN)) {
 		if (IS_ZEBRA_DEBUG_RIB)
-			zlog_debug("%s: ifc %p, %pFX already DOWN",
-				   __func__, ifc, ifc->address);
+			zlog_debug("%s: ifc %p, (%s:%u:%u)%pFX already DOWN", __func__, ifc,
+				   ifp->vrf->name, ifp->vrf->vrf_id, zvrf->table_id, ifc->address);
 		return;
 	}
 
@@ -518,8 +544,9 @@ void connected_down(struct interface *ifp, struct connected *ifc)
 		prefix_copy(&cp, CONNECTED_PREFIX(c));
 		apply_mask(&cp);
 
-		if (prefix_same(&p, &cp) &&
-		    !CHECK_FLAG(c->conf, ZEBRA_IFC_DOWN))
+		if (prefix_same(&p, &cp) && !CHECK_FLAG(c->conf, ZEBRA_IFC_DOWN) &&
+		    !(CHECK_FLAG(c->flags, ZEBRA_IFA_TENTATIVE) ||
+		      CHECK_FLAG(c->flags, ZEBRA_IFA_DADFAILED)))
 			count++;
 
 		if (count >= 1)
@@ -553,9 +580,9 @@ void connected_down(struct interface *ifp, struct connected *ifc)
 	/* Schedule LSP forwarding entries for processing, if appropriate. */
 	if (zvrf->vrf->vrf_id == VRF_DEFAULT) {
 		if (IS_ZEBRA_DEBUG_MPLS)
-			zlog_debug(
-				"%u: IF %s IP %pFX address down, scheduling MPLS processing",
-				zvrf->vrf->vrf_id, ifp->name, &p);
+			zlog_debug("IF %s (%s:%u:%u)%pFX address down, scheduling MPLS processing",
+				   ifp->name, zvrf->vrf->name, zvrf->vrf->vrf_id, zvrf->table_id,
+				   &p);
 		mpls_mark_lsps_for_processing(zvrf, &p);
 	}
 }
@@ -572,11 +599,13 @@ static void connected_delete_helper(struct connected *ifc, struct prefix *p)
 
 	/* Schedule LSP forwarding entries for processing, if appropriate. */
 	if (ifp->vrf->vrf_id == VRF_DEFAULT) {
+		struct zebra_vrf *zvrf = ifp->vrf->info;
+
 		if (IS_ZEBRA_DEBUG_MPLS)
-			zlog_debug(
-				"%u: IF %s IP %pFX address delete, scheduling MPLS processing",
-				ifp->vrf->vrf_id, ifp->name, p);
-		mpls_mark_lsps_for_processing(ifp->vrf->info, p);
+			zlog_debug("IF %s (%s:%u:%u)%pFX address delete, scheduling MPLS processing",
+				   ifp->name, ifp->vrf->name, ifp->vrf->vrf_id,
+				   zvrf ? zvrf->table_id : 0, p);
+		mpls_mark_lsps_for_processing(zvrf, p);
 	}
 }
 

@@ -228,10 +228,11 @@ static size_t zlog_5424_one(struct zlt_5424 *zte, struct zlog_msg *msg,
 		need += bputs(fbuf, "[args@50145");
 
 		for (size_t i = 0; i < n_argpos; i++) {
-			int len = argpos[i].off_end - argpos[i].off_start;
+			unsigned int off_s = MIN(textlen, argpos[i].off_start);
+			unsigned int off_e = MIN(textlen, argpos[i].off_end);
 
-			need += bprintfrr(fbuf, " arg%zu=%*pSQsq", i + 1, len,
-					  text + argpos[i].off_start);
+			need += bprintfrr(fbuf, " arg%zu=%*pSQsq", i + 1, off_e - off_s,
+					  text + off_s);
 		}
 
 		need += bputch(fbuf, ']');
@@ -351,15 +352,16 @@ static size_t zlog_journald_one(struct zlt_5424 *zte, struct zlog_msg *msg,
 
 	if (zte->kw_args && n_argpos) {
 		for (size_t i = 0; i < n_argpos; i++) {
-			int len = argpos[i].off_end - argpos[i].off_start;
+			unsigned int off_s = MIN(textlen, argpos[i].off_start);
+			unsigned int off_e = MIN(textlen, argpos[i].off_end);
 
 			/* rather than escape the value, we could use
 			 * journald's binary encoding, but that seems a bit
 			 * excessive/unnecessary.  99% of things we print here
 			 * will just output 1:1 with %pSE.
 			 */
-			need += bprintfrr(fbuf, "FRR_ARG%zu=%*pSE\n", i + 1,
-					  len, text + argpos[i].off_start);
+			need += bprintfrr(fbuf, "FRR_ARG%zu=%*pSE\n", i + 1, off_e - off_s,
+					  text + off_s);
 		}
 	}
 
@@ -483,8 +485,7 @@ static void zlog_5424(struct zlog_target *zt, struct zlog_msg *msgs[],
 				struct mmsghdr *sendpos;
 
 				for (sendpos = mmsg; sendpos < mpos;) {
-					ret = sendmmsg(fd, sendpos,
-						       mpos - sendpos, 0);
+					ret = sendmmsg(fd, sendpos, mpos - sendpos, MSG_EOR);
 					if (ret <= 0)
 						break;
 					sendpos += ret;
@@ -541,11 +542,11 @@ static void zlog_5424(struct zlog_target *zt, struct zlog_msg *msgs[],
 		need = zlog_one(zte, msgs[i], &state);
 		assert(need == 0);
 
-		if (!zte->sa_len)
+		if (!zte->sa_len && !zte->packets)
 			ret = writev(fd, iov, state.iov - iov);
 		else {
 			mpos->msg_hdr.msg_iovlen = state.iov - iov;
-			ret = sendmsg(fd, &mpos->msg_hdr, 0);
+			ret = sendmsg(fd, &mpos->msg_hdr, MSG_EOR);
 		}
 
 		if (ret < 0)
@@ -686,7 +687,7 @@ static void zlog_5424_sigsafe(struct zlog_target *zt, const char *text,
 
 	fd = atomic_load_explicit(&zte->fd, memory_order_relaxed);
 
-	if (!zte->sa_len)
+	if (!zte->sa_len && !zte->packets)
 		writev(fd, iov, iovp - iov);
 	else {
 		struct msghdr mh = {};
@@ -695,7 +696,7 @@ static void zlog_5424_sigsafe(struct zlog_target *zt, const char *text,
 		mh.msg_namelen = zte->sa_len;
 		mh.msg_iov = iov;
 		mh.msg_iovlen = iovp - iov;
-		sendmsg(fd, &mh, 0);
+		sendmsg(fd, &mh, MSG_EOR);
 	}
 }
 

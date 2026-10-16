@@ -130,6 +130,9 @@ static int bgp_isvalid_nexthop_for_mpls(struct bgp_nexthop_cache *bnc,
 static bool bgp_isvalid_nexthop_for_l3vpn(struct bgp_nexthop_cache *bnc,
 					  struct bgp_path_info *path)
 {
+	struct bgp_table *table;
+	bool nh_valid;
+
 	if (bgp_zebra_num_connects() == 0)
 		return 1;
 
@@ -143,13 +146,23 @@ static bool bgp_isvalid_nexthop_for_l3vpn(struct bgp_nexthop_cache *bnc,
 			return 1;
 		return 0;
 	}
+
 	/*
 	 * In the case of MPLS-VPN, the label is learned from LDP or other
 	 * protocols, and nexthop tracking is enabled for the label.
 	 * The value is recorded as BGP_NEXTHOP_LABELED_VALID.
 	 * - Otherwise check for mpls-gre acceptance
 	 */
-	return bgp_isvalid_nexthop_for_mpls(bnc, path);
+	nh_valid = bgp_isvalid_nexthop_for_mpls(bnc, path);
+
+	table = path->net ? bgp_dest_table(path->net) : NULL;
+	if (nh_valid && table && bnc->bgp->srv6_only &&
+	    ((bgp_srv6_locator_is_configured(bnc->bgp) ||
+	      (table->bgp && bgp_srv6_locator_is_configured(table->bgp)))))
+		/* Control if srv6/mpls coexistence is autorised */
+		nh_valid = false;
+
+	return nh_valid;
 }
 
 static void bgp_unlink_nexthop_check(struct bgp_nexthop_cache *bnc)
@@ -1043,9 +1056,21 @@ void bgp_nexthop_update(struct vrf *vrf, struct prefix *match,
 	 * make zebra's RNH subsystem aware of SR-TE colors (like bgpd is),
 	 * which should provide a better infrastructure to solve this issue in
 	 * a more efficient and elegant way.
+	 *
+	 * The walk below is only useful when colored entries exist. The
+	 * cache tree is keyed by (srte_color, ifindex, prefix), so colored
+	 * entries always sort at the end of the tree: if the last entry is
+	 * colorless, there is no colored entry at all and the walk can be
+	 * skipped. Without this check, every colorless NH update walks the
+	 * whole table for nothing, which makes convergence O(N^2) in the
+	 * number of tracked nexthops for deployments not using SR-TE.
 	 */
 	if (nhr->srte_color == 0) {
 		struct bgp_nexthop_cache *bnc_iter;
+
+		bnc_iter = bgp_nexthop_cache_last(&bgp->nexthop_cache_table[afi]);
+		if (!bnc_iter || bnc_iter->srte_color == 0)
+			return;
 
 		frr_each (bgp_nexthop_cache, &bgp->nexthop_cache_table[afi],
 			  bnc_iter) {
@@ -1440,23 +1465,30 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 	}
 
 	LIST_FOREACH (path, &(bnc->paths), nh_thread) {
+		dest = path->net;
+		assert(dest && bgp_dest_table(dest));
+		p = bgp_dest_get_prefix(dest);
+		afi = family2afi(p->family);
+		table = bgp_dest_table(dest);
+		safi = table->safi;
+
 		/*
-		 * Currently when a peer goes down, bgp immediately
-		 * sees this via the interface events( if it is directly
-		 * connected).  And in this case it takes and puts on
-		 * a special peer queue all path info's associated with
-		 * but these items are not yet processed typically when
-		 * the nexthop is being handled here.  Thus we end
-		 * up in a situation where the process Queue for BGP
-		 * is being asked to look at the same path info multiple
-		 * times.  Let's just cut to the chase here and if
-		 * the bnc has a peer associated with it and the path info
-		 * being looked at uses that peer and the peer is no
-		 * longer established we know the path_info is being
-		 * handled elsewhere and we do not need to process
-		 * it here at all since the pathinfo is going away
+		 * Currently when a peer goes down, bgp immediately sees this
+		 * via the interface events (if it is directly connected).
+		 * The peer-down queue processes the associated path infos in
+		 * the future.  Meanwhile zebra sends a nexthop removal event
+		 * to BGP too, triggering an evaluate_paths() walk that would
+		 * redo work already scheduled on the peer-down queue.  Skip
+		 * such paths here.
+		 *
+		 * Exception: GR-helper paths in a GR-covered (afi, safi) are
+		 * intentionally retained and are not removed by the peer-down
+		 * queue in bgp_clear_route_node().  Do not skip those paths
+		 * here so that an NH-unreachable event can drop them per RFC
+		 * 4724 §4.2 via bgp_nht_handle_gr_stale_nh_unreach().
 		 */
-		if (peer && path->peer == peer && !peer_established(peer->connection))
+		if (peer && path->peer == peer && !peer_established(peer->connection) &&
+		    !(CHECK_FLAG(peer->sflags, PEER_STATUS_NSF_WAIT) && peer->nsf[afi][safi]))
 			continue;
 
 		if (path->type == ZEBRA_ROUTE_BGP &&
@@ -1475,13 +1507,6 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 		} else
 			/* don't evaluate the path */
 			continue;
-
-		dest = path->net;
-		assert(dest && bgp_dest_table(dest));
-		p = bgp_dest_get_prefix(dest);
-		afi = family2afi(p->family);
-		table = bgp_dest_table(dest);
-		safi = table->safi;
 
 		/*
 		 * handle routes from other VRFs (they can have a
@@ -1524,16 +1549,21 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 			if (bgp_update_martian_nexthop(
 				    bnc->bgp, afi, safi, path->type,
 				    path->sub_type, path->attr, dest)) {
-				if (BGP_DEBUG(nht, NHT))
+				if (BGP_DEBUG(nht, NHT)) {
+					struct bgp_debug_vrf dv = bgp_dest_debug_vrf(dest);
+
 					zlog_debug(
-						"%s: prefix %pBD (vrf %s), ignoring path due to martian or self-next-hop",
-						__func__, dest, bgp_path->name);
+						"%s: prefix (%s:%u:%u)%pBD (vrf %s), ignoring path due to martian or self-next-hop",
+						__func__, dv.name, dv.id, dv.table_id, dest,
+						bgp_path->name);
+				}
 			} else
 				bnc_is_valid_nexthop =
 					bgp_isvalid_nexthop(bnc) ? true : false;
 		}
 
 		if (BGP_DEBUG(nht, NHT)) {
+			struct bgp_debug_vrf dv = bgp_dest_debug_vrf(dest);
 
 			if (dest->pdest) {
 				char rd_buf[RD_ADDRSTRLEN];
@@ -1544,14 +1574,14 @@ void evaluate_paths(struct bgp_nexthop_cache *bnc)
 					rd_buf, sizeof(rd_buf),
 					bgp_get_asnotation(bnc->bgp));
 				zlog_debug(
-					"... eval path %d/%d %pBD RD %s %s flags 0x%x",
-					afi, safi, dest, rd_buf,
+					"... eval path %d/%d (%s:%u:%u)%pBD RD %s %s flags 0x%x",
+					afi, safi, dv.name, dv.id, dv.table_id, dest, rd_buf,
 					bgp_path->name_pretty, path->flags);
 			} else
 				zlog_debug(
-					"... eval path %d/%d %pBD %s flags 0x%x",
-					afi, safi, dest, bgp_path->name_pretty,
-					path->flags);
+					"... eval path %d/%d (%s:%u:%u)%pBD %s flags 0x%x",
+					afi, safi, dv.name, dv.id, dv.table_id, dest,
+					bgp_path->name_pretty, path->flags);
 		}
 
 		/* Skip paths marked for removal or as history. */

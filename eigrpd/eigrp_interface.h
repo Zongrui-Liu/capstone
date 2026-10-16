@@ -24,6 +24,67 @@ extern int eigrp_if_delete_hook(struct interface *ifp);
 
 extern bool eigrp_if_is_passive(struct eigrp_interface *ei);
 extern void eigrp_del_if_params(struct eigrp_if_params *eip);
+
+/*
+ * Accessors for the per-interface EIGRP data hung off ifp->info.
+ *
+ * Modeled on ospfd's IF_OSPF_IF_INFO()/IF_DEF_PARAMS()/IF_OIFS().  Note that
+ * ifp->info is a struct eigrp_if_info (interface scope), not a struct
+ * eigrp_interface (address scope) as it was historically.
+ */
+#define IF_EIGRP_IF_INFO(I) ((struct eigrp_if_info *)((I)->info))
+#define EIGRP_IF_DEF_PARAMS(I) (IF_EIGRP_IF_INFO(I)->def_params)
+#define EIGRP_IF_EIS(I) (IF_EIGRP_IF_INFO(I)->eis)
+
+/*
+ * Interface configuration lifecycle.
+ *
+ * eigrp_if_info_get() allocates the per-interface data on demand, so
+ * configuration can be stored whether or not EIGRP is running on the
+ * interface.  That is what fixes issue #11301.
+ */
+extern struct eigrp_if_params *eigrp_new_if_params(void);
+extern struct eigrp_if_info *eigrp_if_info_get(struct interface *ifp);
+extern void eigrp_if_info_free(struct interface *ifp);
+
+/*
+ * Tear down the running instances on an interface while keeping its
+ * configuration.  Use this when EIGRP stops on an interface; only interface
+ * deletion should discard the configuration as well.
+ */
+extern void eigrp_if_free_all(struct interface *ifp);
+
+/* As above, but only the instances belonging to one EIGRP process. */
+extern void eigrp_if_free_process(struct eigrp *eigrp, struct interface *ifp);
+
+/*
+ * The address EIGRP sources packets from on an interface.  Re-derived from
+ * ifp->connected rather than pinned, so it cannot name an address the box no
+ * longer holds.
+ */
+extern void eigrp_if_refresh_address(struct eigrp_interface *ei);
+extern bool eigrp_if_has_address(struct eigrp_interface *ei, struct in_addr address);
+
+/*
+ * The connected subnets an instance advertises.  eigrp_connected_add() is
+ * idempotent per subnet: two addresses in one subnet share a single entry,
+ * because they describe the same EIGRP prefix.
+ */
+extern struct eigrp_connected *eigrp_connected_add(struct eigrp_interface *ei,
+						   const struct prefix *address);
+extern struct eigrp_connected *eigrp_connected_lookup(struct eigrp_interface *ei,
+						      const struct prefix *address);
+extern void eigrp_connected_withdraw(struct eigrp_connected *ec);
+extern void eigrp_connected_delete(struct eigrp_connected *ec);
+
+/*
+ * Look up the instance a given EIGRP process runs on an interface.
+ *
+ * An interface can carry one instance per autonomous system, so the process
+ * is part of the question.  Interface-scoped work with no process in hand --
+ * the zebra hooks -- walks EIGRP_IF_EIS() instead.
+ */
+extern struct eigrp_interface *eigrp_if_lookup(struct eigrp *eigrp, struct interface *ifp);
 extern struct eigrp_interface *eigrp_if_new(struct eigrp *eigrp, struct interface *ifp,
 					    struct prefix *p);
 extern int eigrp_if_up(struct eigrp_interface *ei);

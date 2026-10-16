@@ -33,6 +33,7 @@
 #include "bgpd/bgp_rd.h"
 #include "bgpd/bgp_mplsvpn.h"
 #include "bgpd/bgp_bfd.h"
+#include "bgpd/bgp_zebra.h"
 
 DEFINE_MTYPE_STATIC(BGPD, MARTIAN_STRING, "BGP Martian Addr Intf String");
 
@@ -378,6 +379,49 @@ static void bgp_address_del(struct bgp *bgp, struct connected *ifc,
 	}
 }
 
+static void bgp_connected_peer_nexthop_update(struct bgp *bgp)
+{
+	struct listnode *node, *nnode;
+	struct peer *peer;
+	afi_t afi;
+	safi_t safi;
+
+	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
+		struct bgp_nexthop nexthop, old;
+		bool addr_changed;
+
+		if (!peer->connection || !peer->connection->su_local ||
+		    !peer->connection->su_remote)
+			continue;
+
+		if (!bgp_zebra_nexthop_set(peer->connection->su_local,
+					   peer->connection->su_remote,
+					   &nexthop, peer))
+			continue;
+
+		if (peer->nexthop.ifp == nexthop.ifp)
+			continue;
+
+		old = peer->nexthop;
+		addr_changed = !IPV4_ADDR_SAME(&old.v4, &nexthop.v4) ||
+			       !IPV6_ADDR_SAME(&old.v6_global, &nexthop.v6_global) ||
+			       !IPV6_ADDR_SAME(&old.v6_local, &nexthop.v6_local);
+
+		peer->nexthop = nexthop;
+		bgp_peer_bfd_update_source(peer);
+
+		if (BGP_DEBUG(zebra, ZEBRA))
+			zlog_debug("%pBP nexthop changed: ifp %s -> %s, v4 %pI4 -> %pI4, global %pI6 -> %pI6, local %pI6 -> %pI6%s",
+				   peer, old.ifp ? old.ifp->name : "(none)",
+				   nexthop.ifp ? nexthop.ifp->name : "(none)", &old.v4,
+				   &nexthop.v4, &old.v6_global, &nexthop.v6_global, &old.v6_local,
+				   &nexthop.v6_local, addr_changed ? ", reannouncing routes" : "");
+
+		if (addr_changed)
+			FOREACH_AFI_SAFI (afi, safi)
+				bgp_announce_route(peer, afi, safi, true);
+	}
+}
 
 struct bgp_connected_ref {
 	unsigned int refcnt;
@@ -439,10 +483,10 @@ void bgp_connected_add(struct bgp *bgp, struct connected *ifc)
 		}
 	}
 
-	/*
-	 * Iterate over all the peers and attempt to set the bfd session
-	 * data and if it's a bgp unnumbered get her flowing if necessary
-	 */
+	/* Refresh peer interfaces after connected addresses change. */
+	bgp_connected_peer_nexthop_update(bgp);
+
+	/* If it's a BGP unnumbered get her flowing if necessary. */
 	for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
 		bgp_peer_bfd_update_source(peer);
 		if (peer->conf_if && (strcmp(peer->conf_if, ifc->ifp->name) == 0) &&
@@ -472,6 +516,7 @@ void bgp_connected_delete(struct bgp *bgp, struct connected *ifc)
 			return;
 
 		bgp_address_del(bgp, ifc, addr);
+		bgp_connected_peer_nexthop_update(bgp);
 
 		dest = bgp_node_lookup(bgp->connected_table[AFI_IP], &p);
 	} else if (addr->family == AF_INET6) {
@@ -482,6 +527,7 @@ void bgp_connected_delete(struct bgp *bgp, struct connected *ifc)
 			return;
 
 		bgp_address_del(bgp, ifc, addr);
+		bgp_connected_peer_nexthop_update(bgp);
 
 		dest = bgp_node_lookup(bgp->connected_table[AFI_IP6], &p);
 	}
@@ -571,8 +617,7 @@ bool bgp_nexthop_self(struct bgp *bgp, afi_t afi, uint8_t type,
 
 	if (new_afi == AF_INET && hashcount(bgp->tip_hash)) {
 		memset(&tmp_tip, 0, sizeof(tmp_tip));
-		SET_IPADDR_V4(&tmp_tip.addr);
-		IPV4_ADDR_COPY(&tmp_tip.addr.ipaddr_v4, &attr->nexthop);
+		ipaddr_set_v4(&tmp_tip.addr, attr->nexthop);
 
 		if (bgp_attr_exists(attr, BGP_ATTR_NEXT_HOP)) {
 			IPV4_ADDR_COPY(&tmp_tip.addr.ipaddr_v4, &attr->nexthop);
@@ -584,8 +629,7 @@ bool bgp_nexthop_self(struct bgp *bgp, afi_t afi, uint8_t type,
 			   (attr->mp_nexthop_len == BGP_ATTR_NHLEN_IPV6_GLOBAL_AND_LL) ||
 			   (attr->mp_nexthop_len == BGP_ATTR_NHLEN_VPNV6_GLOBAL) ||
 			   (attr->mp_nexthop_len == BGP_ATTR_NHLEN_VPNV6_GLOBAL_AND_LL)) {
-			SET_IPADDR_V6(&tmp_tip.addr);
-			IPV6_ADDR_COPY(&tmp_tip.addr.ipaddr_v6, &attr->mp_nexthop_global);
+			ipaddr_set_v6(&tmp_tip.addr, &attr->mp_nexthop_global);
 		}
 
 		tip = hash_lookup(bgp->tip_hash, &tmp_tip);
@@ -606,8 +650,8 @@ bool bgp_hostroute_self(struct bgp *bgp, const struct prefix *p)
 
 bool bgp_multiaccess_check_v4(struct in_addr nexthop, struct peer *peer)
 {
-	struct bgp_dest *dest1;
-	struct bgp_dest *dest2;
+	struct bgp_dest *dest1 BGP_DEST_AUTOUNLOCK = NULL;
+	struct bgp_dest *dest2 BGP_DEST_AUTOUNLOCK = NULL;
 	struct prefix p;
 	int ret;
 
@@ -624,23 +668,19 @@ bool bgp_multiaccess_check_v4(struct in_addr nexthop, struct peer *peer)
 	p.u.prefix4 = peer->connection->su.sin.sin_addr;
 
 	dest2 = bgp_node_match(peer->bgp->connected_table[AFI_IP], &p);
-	if (!dest2) {
-		bgp_dest_unlock_node(dest1);
+	if (!dest2)
 		return false;
-	}
 
 	ret = (dest1 == dest2);
 
-	bgp_dest_unlock_node(dest1);
-	bgp_dest_unlock_node(dest2);
-
+	/* coverity[double_free] - aliased dest, locked by each bgp_node_match() */
 	return ret;
 }
 
 bool bgp_multiaccess_check_v6(struct in6_addr nexthop, struct peer *peer)
 {
-	struct bgp_dest *dest1;
-	struct bgp_dest *dest2;
+	struct bgp_dest *dest1 BGP_DEST_AUTOUNLOCK = NULL;
+	struct bgp_dest *dest2 BGP_DEST_AUTOUNLOCK = NULL;
 	struct prefix p;
 	int ret;
 
@@ -657,16 +697,12 @@ bool bgp_multiaccess_check_v6(struct in6_addr nexthop, struct peer *peer)
 	p.u.prefix6 = peer->connection->su.sin6.sin6_addr;
 
 	dest2 = bgp_node_match(peer->bgp->connected_table[AFI_IP6], &p);
-	if (!dest2) {
-		bgp_dest_unlock_node(dest1);
+	if (!dest2)
 		return false;
-	}
 
 	ret = (dest1 == dest2);
 
-	bgp_dest_unlock_node(dest1);
-	bgp_dest_unlock_node(dest2);
-
+	/* coverity[double_free] - aliased dest, locked by each bgp_node_match() */
 	return ret;
 }
 
@@ -674,7 +710,8 @@ bool bgp_subgrp_multiaccess_check_v6(struct in6_addr nexthop,
 				     struct update_subgroup *subgrp,
 				     struct peer *exclude)
 {
-	struct bgp_dest *dest1 = NULL, *dest2 = NULL;
+	struct bgp_dest *dest1 BGP_DEST_AUTOUNLOCK = NULL;
+	struct bgp_dest *dest2 = NULL;
 	struct peer_af *paf = NULL;
 	struct prefix p = {0}, np = {0};
 	struct bgp *bgp = NULL;
@@ -699,8 +736,8 @@ bool bgp_subgrp_multiaccess_check_v6(struct in6_addr nexthop,
 		p.u.prefix6 = paf->peer->connection->su.sin6.sin6_addr;
 		dest2 = bgp_node_match(bgp->connected_table[AFI_IP6], &p);
 		if (dest1 == dest2) {
-			bgp_dest_unlock_node(dest1);
 			bgp_dest_unlock_node(dest2);
+			/* coverity[double_free] - aliased dest, locked by each bgp_node_match() */
 			return true;
 		}
 
@@ -708,7 +745,6 @@ bool bgp_subgrp_multiaccess_check_v6(struct in6_addr nexthop,
 			bgp_dest_unlock_node(dest2);
 	}
 
-	bgp_dest_unlock_node(dest1);
 	return false;
 }
 
@@ -716,7 +752,8 @@ bool bgp_subgrp_multiaccess_check_v4(struct in_addr nexthop,
 				     struct update_subgroup *subgrp,
 				     struct peer *exclude)
 {
-	struct bgp_dest *dest1, *dest2;
+	struct bgp_dest *dest1 BGP_DEST_AUTOUNLOCK = NULL;
+	struct bgp_dest *dest2;
 	struct peer_af *paf;
 	struct prefix p, np;
 	struct bgp *bgp;
@@ -742,8 +779,8 @@ bool bgp_subgrp_multiaccess_check_v4(struct in_addr nexthop,
 
 		dest2 = bgp_node_match(bgp->connected_table[AFI_IP], &p);
 		if (dest1 == dest2) {
-			bgp_dest_unlock_node(dest1);
 			bgp_dest_unlock_node(dest2);
+			/* coverity[double_free] - aliased dest, locked by each bgp_node_match() */
 			return true;
 		}
 
@@ -751,7 +788,6 @@ bool bgp_subgrp_multiaccess_check_v4(struct in_addr nexthop,
 			bgp_dest_unlock_node(dest2);
 	}
 
-	bgp_dest_unlock_node(dest1);
 	return false;
 }
 

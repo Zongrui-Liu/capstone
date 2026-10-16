@@ -346,9 +346,9 @@ pim_neighbor_new(struct interface *ifp, pim_addr source_addr,
 	/* flood to the new neighbor if needed */
 	if (HAVE_DENSE_MODE(pim_ifp->pim_mode)) {
 		frr_each (rb_pim_oil, &pim_ifp->pim->channel_oil_head, c_oil) {
-			if (pim_is_grp_dm(pim_ifp->pim, *oil_mcastgrp(c_oil)) && c_oil->installed &&
-			    !oil_if_has(c_oil, pim_ifp->mroute_vif_index)) {
-				oil_if_set(c_oil, pim_ifp->mroute_vif_index, 1);
+			if (pim_is_grp_dm(pim_ifp->pim, c_oil->group) && c_oil->installed &&
+			    !channel_oil_oif_find(c_oil, pim_ifp->mroute_vif_index)) {
+				pim_channel_add_dm_oif(c_oil, ifp);
 				pim_upstream_mroute_update(c_oil, __func__);
 			}
 		}
@@ -526,7 +526,7 @@ pim_neighbor_add(struct interface *ifp, pim_addr source_addr,
 	else
 		pim_hello_restart_triggered(neigh->interface);
 
-	pim_upstream_find_new_rpf(pim_ifp->pim);
+	pim_upstream_find_new_rpf(pim_ifp->pim, ifp);
 
 	/* RNH can send nexthop update prior to PIM neibhor UP
 	   in that case nexthop cache would not consider this neighbor
@@ -654,6 +654,7 @@ void pim_neighbor_delete(struct interface *ifp, struct pim_neighbor *neigh,
 	listnode_delete(pim_ifp->pim_neighbor_list, neigh);
 
 	pim_neighbor_free(neigh);
+	pim_upstream_find_new_rpf(pim_ifp->pim, ifp);
 
 	sched_rpf_cache_refresh(pim_ifp->pim);
 }
@@ -861,5 +862,5 @@ void pim_neighbor_update(struct pim_neighbor *neigh,
 	 * resolvable. Re-evaluate upstreams that don't have a valid RPF path.
 	 */
 	if (secondary_addr_changed)
-		pim_upstream_find_new_rpf(pim_ifp->pim);
+		pim_upstream_find_new_rpf(pim_ifp->pim, neigh->interface);
 }

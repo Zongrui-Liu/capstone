@@ -439,12 +439,11 @@ static int netlink_extract_gre_info(struct rtattr *link_data, struct zebra_l2inf
 
 		frrtrace(1, frr_zebra, if_netlink_parse_error, 2);
 	} else if (ipv6) {
-		SET_IPADDR_V6(&gre_info->vtep_ip);
-		IPV6_ADDR_COPY(&gre_info->vtep_ip.ipaddr_v6,
-			       (struct in6_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]));
+		ipaddr_set_v6(&gre_info->vtep_ip,
+			      (struct in6_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]));
 	} else {
-		SET_IPADDR_V4(&gre_info->vtep_ip);
-		gre_info->vtep_ip.ipaddr_v4 = *(struct in_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]);
+		ipaddr_set_v4(&gre_info->vtep_ip,
+			      *(struct in_addr *)RTA_DATA(attr[IFLA_GRE_LOCAL]));
 	}
 	if (!attr[IFLA_GRE_REMOTE]) {
 		if (IS_ZEBRA_DEBUG_KERNEL)
@@ -453,13 +452,11 @@ static int netlink_extract_gre_info(struct rtattr *link_data, struct zebra_l2inf
 
 		frrtrace(1, frr_zebra, if_netlink_parse_error, 3);
 	} else if (ipv6) {
-		SET_IPADDR_V6(&gre_info->vtep_ip_remote);
-		IPV6_ADDR_COPY(&gre_info->vtep_ip_remote.ipaddr_v6,
-			       (struct in6_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]));
+		ipaddr_set_v6(&gre_info->vtep_ip_remote,
+			      (struct in6_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]));
 	} else {
-		SET_IPADDR_V4(&gre_info->vtep_ip_remote);
-		gre_info->vtep_ip_remote.ipaddr_v4 =
-			*(struct in_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]);
+		ipaddr_set_v4(&gre_info->vtep_ip_remote,
+			      *(struct in_addr *)RTA_DATA(attr[IFLA_GRE_REMOTE]));
 	}
 
 	if (!attr[IFLA_GRE_LINK]) {
@@ -525,15 +522,14 @@ static int netlink_extract_vxlan_info(struct rtattr *link_data,
 
 
 	if (attr[IFLA_VXLAN_LOCAL]) {
-		vxl_info->vtep_ip.ipaddr_v4 = *(struct in_addr *)RTA_DATA(attr[IFLA_VXLAN_LOCAL]);
-		SET_IPADDR_V4(&vxl_info->vtep_ip);
+		ipaddr_set_v4(&vxl_info->vtep_ip,
+			      *(struct in_addr *)RTA_DATA(attr[IFLA_VXLAN_LOCAL]));
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug("IFLA_VXLAN_LOCAL VXLAN IF message, local address V4: %pIA",
 				   &vxl_info->vtep_ip);
 	} else if (attr[IFLA_VXLAN_LOCAL6]) {
-		IPV6_ADDR_COPY(&vxl_info->vtep_ip.ipaddr_v6,
-			       (struct in6_addr *)RTA_DATA(attr[IFLA_VXLAN_LOCAL6]));
-		SET_IPADDR_V6(&vxl_info->vtep_ip);
+		ipaddr_set_v6(&vxl_info->vtep_ip,
+			      (struct in6_addr *)RTA_DATA(attr[IFLA_VXLAN_LOCAL6]));
 		if (IS_ZEBRA_DEBUG_KERNEL)
 			zlog_debug("IFLA_VXLAN_LOCAL VXLAN IF message, local address V6: %pIA",
 				   &vxl_info->vtep_ip);
@@ -1205,27 +1201,6 @@ int netlink_interface_addr_dplane(struct nlmsghdr *h, ns_id_t ns_id, int startup
 
 			return -1;
 		}
-
-		/* Only consider valid addresses; we'll not get a kernel
-		 * notification till IPv6 DAD has completed, but at init
-		 * time, FRR does query for and will receive all addresses.
-		 */
-		if (h->nlmsg_type == RTM_NEWADDR
-		    && (kernel_flags & IFA_F_DADFAILED)) {
-			/* DAD failed - always skip these addresses */
-			if (IS_ZEBRA_DEBUG_KERNEL)
-				zlog_debug("%s: %s: DAD failed addr",
-					   __func__,
-					   nl_msg_type_to_str(h->nlmsg_type));
-
-			frrtrace(3, frr_zebra, netlink_msg_err, nl_msg_type_to_str(h->nlmsg_type),
-				 0, 5);
-
-			return 0;
-		}
-		/* Note: IFA_F_TENTATIVE is passed via context to main pthread
-		 * for handling - we cannot access interface pointers here.
-		 */
 	}
 
 	/* logic copied from iproute2/ip/ipaddress.c:print_addrinfo() */
@@ -1305,6 +1280,9 @@ int netlink_interface_addr_dplane(struct nlmsghdr *h, ns_id_t ns_id, int startup
 
 	if (kernel_flags & IFA_F_TENTATIVE)
 		dplane_ctx_intf_set_tentative(ctx);
+
+	if (kernel_flags & IFA_F_DADFAILED)
+		dplane_ctx_intf_set_dadfailed(ctx);
 
 	/* Label */
 	if (tb[IFA_LABEL]) {
@@ -1641,11 +1619,6 @@ void interface_list(struct zebra_ns *zns)
 void interface_list_second(struct zebra_ns *zns)
 {
 	zebra_if_update_all_links(zns);
-	/* We add routes for interface address,
-	 * so we need to get the nexthop info
-	 * from the kernel before we can do that
-	 */
-	netlink_nexthop_read(zns);
 
 	interface_addr_lookup_netlink(zns);
 
@@ -1711,6 +1684,83 @@ int netlink_tunneldump_read(struct zebra_ns *zns)
 	ret = ctx.ret;
 
 	return ret;
+}
+
+/*
+ * netlink_tunnel_change() - Decode an incoming RTM_NEWTUNNEL/RTM_DELTUNNEL
+ * (and RTM_GETTUNNEL dump replies) into typed dplane contexts.
+ *
+ * Each VXLAN_VNIFILTER_ENTRY becomes one DPLANE_OP_TUNNEL_NOTIFY context
+ * enqueued to the zebra master pthread. Interface lookup and policy live
+ * there; this function is only the decoder.
+ *
+ * Startup dumps still use netlink_cmd via netlink_tunneldump_read() and
+ * netlink_link_change(); this parser is for live dplane inbound events.
+ */
+int netlink_tunnel_change(struct nlmsghdr *h, ns_id_t ns_id, int startup, void *arg)
+{
+	struct tunnel_msg *tnlm;
+	struct rtattr *attr;
+	int len;
+	enum dplane_tunnel_notify_e notify_type;
+
+	if (h->nlmsg_type != RTM_NEWTUNNEL && h->nlmsg_type != RTM_DELTUNNEL &&
+	    h->nlmsg_type != RTM_GETTUNNEL)
+		return 0;
+
+	len = h->nlmsg_len - NLMSG_LENGTH(sizeof(struct tunnel_msg));
+	if (len < 0) {
+		flog_err(EC_ZEBRA_NETLINK_LENGTH_ERROR,
+			 "%s: Message received from netlink is of a broken size %d %zu", __func__,
+			 h->nlmsg_len, (size_t)NLMSG_LENGTH(sizeof(struct tunnel_msg)));
+		return -1;
+	}
+
+	tnlm = NLMSG_DATA(h);
+	notify_type = (h->nlmsg_type == RTM_DELTUNNEL) ? DPLANE_TUNNEL_NOTIFY_DEL
+						       : DPLANE_TUNNEL_NOTIFY_NEW;
+
+	if (IS_ZEBRA_DEBUG_KERNEL || IS_ZEBRA_DEBUG_VXLAN)
+		zlog_debug("%s: %s family %u ifindex %u ns %u startup %d", __func__,
+			   nl_msg_type_to_str(h->nlmsg_type), tnlm->family, tnlm->ifindex, ns_id,
+			   startup);
+
+	for (attr = TUNNEL_RTA(tnlm); RTA_OK(attr, len); attr = RTA_NEXT(attr, len)) {
+		struct rtattr *ttb[VXLAN_VNIFILTER_ENTRY_MAX + 1];
+		uint8_t rta_type;
+		vni_t vni_start = 0, vni_end = 0;
+		struct in_addr *mcast_grp = NULL;
+		struct in6_addr *mcast_grp6 = NULL;
+
+		rta_type = attr->rta_type & NLA_TYPE_MASK;
+		if (rta_type != VXLAN_VNIFILTER_ENTRY)
+			continue;
+
+		memset(ttb, 0, sizeof(ttb));
+		netlink_parse_rtattr_flags(ttb, VXLAN_VNIFILTER_ENTRY_MAX, RTA_DATA(attr),
+					   RTA_PAYLOAD(attr), NLA_F_NESTED);
+
+		if (!ttb[VXLAN_VNIFILTER_ENTRY_START])
+			continue;
+
+		vni_start = *(uint32_t *)RTA_DATA(ttb[VXLAN_VNIFILTER_ENTRY_START]);
+		if (ttb[VXLAN_VNIFILTER_ENTRY_END])
+			vni_end = *(uint32_t *)RTA_DATA(ttb[VXLAN_VNIFILTER_ENTRY_END]);
+
+		if (ttb[VXLAN_VNIFILTER_ENTRY_GROUP] &&
+		    RTA_PAYLOAD(ttb[VXLAN_VNIFILTER_ENTRY_GROUP]) >= sizeof(struct in_addr))
+			mcast_grp = (struct in_addr *)RTA_DATA(ttb[VXLAN_VNIFILTER_ENTRY_GROUP]);
+
+		if (ttb[VXLAN_VNIFILTER_ENTRY_GROUP6] &&
+		    RTA_PAYLOAD(ttb[VXLAN_VNIFILTER_ENTRY_GROUP6]) >= sizeof(struct in6_addr))
+			mcast_grp6 = (struct in6_addr *)RTA_DATA(ttb[VXLAN_VNIFILTER_ENTRY_GROUP6]);
+
+		dplane_tunnel_notify_enqueue(ns_id, notify_type, !!startup, tnlm->family,
+					     tnlm->ifindex, vni_start, vni_end, mcast_grp,
+					     mcast_grp6);
+	}
+
+	return 0;
 }
 
 static int tunneldump_walk_cb(struct interface *ifp, void *arg)

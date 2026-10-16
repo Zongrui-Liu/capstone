@@ -46,7 +46,7 @@
 #include "bgpd/bgp_ls.h"
 
 DEFINE_HOOK(peer_backward_transition, (struct peer * peer), (peer));
-DEFINE_HOOK(peer_status_changed, (struct peer * peer), (peer));
+DEFINE_HOOK(peer_status_changed, (struct peer_connection * connection), (connection));
 DEFINE_HOOK(bgp_rpki_connection_status, (const char *vrf_name), (vrf_name));
 
 bool bgp_rpki_cache_connected(struct bgp *bgp)
@@ -408,9 +408,12 @@ void bgp_timer_set(struct peer_connection *connection)
 		/* Active is waiting connection from remote peer.  And if
 		   connect timer is expired, change status to Connect. */
 		event_cancel(&connection->t_start);
-		/* If peer is passive mode, do not set connect timer. */
-		if (CHECK_FLAG(peer->flags, PEER_FLAG_PASSIVE)
-		    || CHECK_FLAG(peer->sflags, PEER_STATUS_NSF_WAIT)) {
+		/* If peer is passive mode or held by BFD strict mode, do not set
+		 * connect timer.
+		 */
+		if (CHECK_FLAG(peer->flags, PEER_FLAG_PASSIVE) ||
+		    CHECK_FLAG(peer->sflags, PEER_STATUS_NSF_WAIT) ||
+		    CHECK_FLAG(peer->sflags, PEER_STATUS_BFD_STRICT_HOLD)) {
 			event_cancel(&connection->t_connect);
 		} else {
 			if (CHECK_FLAG(peer->flags, PEER_FLAG_TIMER_DELAYOPEN))
@@ -1401,14 +1404,30 @@ static void bgp_advertisement_delay_begin(struct bgp *bgp)
 }
 
 /*
- * Handle first peer Established for advertisement-delay.
+ * Called when any peer reaches Established.
+ * Start advertisement-delay for every instance that has it configured.
+ *
+ * The peer that triggered this belongs to one instance, but the timer is
+ * started for all of them, so graceful-restart has to be checked per instance
+ * here.  gr_route_sync_pending is true only while that instance is actually
+ * retaining routes for a graceful restart, which is what advertisement-delay
+ * has to stay out of the way of.
  */
-static void bgp_advertisement_delay_process_status_change(struct peer *peer)
+static void bgp_peer_established_handle_all_vrfs(void)
 {
-	struct bgp *bgp = peer->bgp;
+	struct listnode *node;
+	struct bgp *bgp;
 
-	if (peer_established(peer->connection) && !bgp->advertisement_delay_started)
-		bgp_advertisement_delay_begin(bgp);
+	for (ALL_LIST_ELEMENTS_RO(bm->bgp, node, bgp)) {
+		if (!bgp_advertisement_delay_configured(bgp))
+			continue;
+
+		if (bgp->gr_route_sync_pending)
+			continue;
+
+		if (bgp_advertisement_delay_applicable(bgp) && !bgp->advertisement_delay_started)
+			bgp_advertisement_delay_begin(bgp);
+	}
 }
 
 /* Steps to begin the update delay:
@@ -2084,11 +2103,10 @@ void bgp_fsm_change_status(struct peer_connection *connection,
 	/* Save event that caused status change. */
 	peer->last_major_event = peer->cur_event;
 
+	hook_call(peer_status_changed, connection);
+
 	if (status == Established)
 		connection->dir = ESTABLISHED;
-
-	/* Operations after status change */
-	hook_call(peer_status_changed, peer);
 
 	/* If max-med processing is applicable, do the necessary. */
 	if (status == Established) {
@@ -2098,20 +2116,19 @@ void bgp_fsm_change_status(struct peer_connection *connection,
 			bgp->maxmed_onstartup_over = 1;
 	}
 
-	/* Check for GR restarter, update-delay, or advertisement-delay.
-	 * When GR is not applicable, both update-delay and advertisement-delay
-	 * can run independently.
-	 */
+	/* Check for GR restarter or update-delay. */
 	if (gr_path_select_deferral_applicable(bgp))
 		bgp_gr_process_peer_status_change(peer);
-	else {
-		if (bgp_update_delay_configured(bgp) && bgp_update_delay_applicable(bgp))
-			bgp_update_delay_process_status_change(peer);
+	else if (bgp_update_delay_configured(bgp) && bgp_update_delay_applicable(bgp))
+		bgp_update_delay_process_status_change(peer);
 
-		if (bgp_advertisement_delay_configured(bgp) &&
-		    bgp_advertisement_delay_applicable(bgp))
-			bgp_advertisement_delay_process_status_change(peer);
-	}
+	/* advertisement-delay is VRF-aware: a peer reaching Established in any
+	 * instance starts the timer for every instance that has it configured.
+	 * Graceful-restart is checked per instance inside, so this must not be
+	 * gated on the state of the triggering peer's instance.
+	 */
+	if (status == Established)
+		bgp_peer_established_handle_all_vrfs();
 
 	if (bgp_debug_neighbor_events(peer))
 		zlog_debug("%s fd %d went from %s to %s for %s", peer->host, connection->fd,
@@ -2265,6 +2282,8 @@ enum bgp_fsm_state_progress bgp_stop(struct peer_connection *connection)
 	event_cancel(&connection->t_routeadv);
 	event_cancel(&connection->t_delayopen);
 
+	UNSET_FLAG(peer->sflags, PEER_STATUS_BFD_STRICT_HOLD);
+
 	/* Clear input and output buffer.  */
 	frr_with_mutex (&connection->io_mtx) {
 		if (connection->ibuf)
@@ -2295,9 +2314,6 @@ enum bgp_fsm_state_progress bgp_stop(struct peer_connection *connection)
 
 	/* Capabilities are gone: revert the message-size limit to standard. */
 	bgp_peer_set_max_packet_size(peer);
-
-	/* Resetting neighbor role to the default value */
-	peer->remote_role = ROLE_UNDEFINED;
 
 	FOREACH_AFI_SAFI (afi, safi) {
 		/* Reset all negotiated variables */
@@ -2720,7 +2736,10 @@ static enum bgp_fsm_state_progress bgp_start(struct peer_connection *connection)
 				   peer->host, connection->fd,
 				   bgp_peer_get_connection_direction_string(connection));
 
-		BGP_EVENT_ADD(connection, TCP_connection_open);
+		if (CHECK_FLAG(peer->flags, PEER_FLAG_TIMER_DELAYOPEN))
+			BGP_EVENT_ADD(connection, TCP_connection_open_w_delay);
+		else
+			BGP_EVENT_ADD(connection, TCP_connection_open);
 		break;
 	case connect_in_progress:
 		/* To check nonblocking connect, we wait until socket is
@@ -3147,7 +3166,8 @@ void bgp_fsm_nht_update(struct peer_connection *connection, struct peer *peer,
 		}
 		break;
 	case Active:
-		if (has_valid_nexthops) {
+		/* Do not disturb a connection held by BFD strict mode. */
+		if (has_valid_nexthops && !CHECK_FLAG(peer->sflags, PEER_STATUS_BFD_STRICT_HOLD)) {
 			event_cancel(&connection->t_connect);
 			BGP_EVENT_ADD(connection, ConnectRetry_timer_expired);
 		}
