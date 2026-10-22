@@ -332,6 +332,9 @@ def setup_module(mod):
 
 def teardown_module(mod):
     "Teardown the pytest environment"
+    if ENABLE_LIVE_ROUTE_GRAPH:
+        logger.info('sleep 5 sec to allow the graph to collect post-test samples.')
+        time.sleep(5)
     _sampler_stop.set()
     sampler = getattr(mod, "route_sampler", None)
     if sampler:
@@ -1358,6 +1361,8 @@ def test_evpn_multiple_host_pairs_mobility():
     host_pairs = [
         ("host11", "host21"),
         ("host12", "host22"),
+        ("host31", "host41"),
+        ("host32", "host42")
     ]
 
     # Repeatedly run the module-level session check before starting movement.
