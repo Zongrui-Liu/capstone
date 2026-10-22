@@ -45,6 +45,28 @@ class MobilityMetrics:
         except Exception as exc:
             self.warnings.append('{} {}: {}'.format(node_name, filename, exc))
 
+    def _router_daemon_pids(self, router):
+        """Resolve and verify daemon PIDs through this router's PID files."""
+        node = self.tgen.net[router]
+        result = {}
+        for daemon in ('bgpd', 'zebra'):
+            try:
+                raw_pid = node.cmd_raises(
+                    'cat /var/run/frr/{}.pid'.format(daemon)).strip()
+                pid = int(raw_pid)
+                if pid <= 0:
+                    raise ValueError('PID must be positive')
+                actual_name = node.cmd_raises(
+                    'ps -p {} -o comm='.format(pid)).strip()
+                if actual_name != daemon:
+                    raise ValueError('PID {} belongs to {!r}, not {!r}'.format(
+                        pid, actual_name, daemon))
+                result[daemon] = pid
+            except Exception as exc:
+                self.warnings.append(
+                    'CPU collector {} {} PID: {}'.format(router, daemon, exc))
+        return result
+
     def snapshot(self, label):
         result = {'utc': stamp(), 'routers': {}}
         for name in self.routers:
@@ -87,13 +109,16 @@ class MobilityMetrics:
                     self.event['raw_files'].append(filename)
                 except Exception as exc:
                     self.warnings.append('capture {} {}: {}'.format(router, interface, exc))
-            # pidstat samples the FRR processes *inside the router namespace*.
-            # pgrep may find several processes, and pidstat can track their PIDs.
-            self._launch(router,
-                         "pids=$(pgrep -d, -x 'bgpd|zebra'); "
-                         'if [ -n "$pids" ]; then exec pidstat -h -u -p "$pids" 1; '
-                         'else echo "No bgpd/zebra PIDs visible"; fi',
-                         'cpu_{}.log'.format(router))
+            # Resolve router-specific PIDs; a global pgrep mixes all routers.
+            daemon_pids = self._router_daemon_pids(router)
+            self.event.setdefault('cpu_daemon_pids', {})[router] = daemon_pids
+            if daemon_pids:
+                pid_csv = ','.join(str(pid) for pid in daemon_pids.values())
+                self._launch(router,
+                             'exec pidstat -h -u -p {} 1'.format(pid_csv),
+                             'cpu_{}.log'.format(router))
+            else:
+                self.warnings.append('CPU collection skipped for {}'.format(router))
         # Give tcpdump and ping a short opportunity to initialize before movement.
         time.sleep(0.3)
 

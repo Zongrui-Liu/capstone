@@ -1,0 +1,708 @@
+{
+  "result": "passed",
+  "identity_moves": 4,
+  "pairs": [
+    {
+      "hosts": [
+        "host11",
+        "host21"
+      ],
+      "identity_moves": 2,
+      "before_hosts": [
+        {
+          "host": "host11",
+          "leaf": "leaf1",
+          "vtep": "10.0.0.1",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.11/24",
+          "mac": "00:00:00:00:00:11"
+        },
+        {
+          "host": "host21",
+          "leaf": "leaf2",
+          "vtep": "10.0.0.2",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.21/24",
+          "mac": "00:00:00:00:00:21"
+        }
+      ],
+      "after_hosts": [
+        {
+          "host": "host11",
+          "leaf": "leaf1",
+          "vtep": "10.0.0.1",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.21/24",
+          "mac": "00:00:00:00:00:21"
+        },
+        {
+          "host": "host21",
+          "leaf": "leaf2",
+          "vtep": "10.0.0.2",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.11/24",
+          "mac": "00:00:00:00:00:11"
+        }
+      ],
+      "before_macs": {
+        "leaf1": {
+          "00:00:00:00:00:11": {
+            "type": "local",
+            "intf": "eth-host11",
+            "ifindex": 4,
+            "uptime": "00:00:15",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.11"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:13",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.21"
+              ],
+              "inactive": []
+            }
+          }
+        },
+        "leaf2": {
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:13",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.11"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:21": {
+            "type": "local",
+            "intf": "eth-host21",
+            "ifindex": 4,
+            "uptime": "00:00:14",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.21"
+              ],
+              "inactive": []
+            }
+          }
+        },
+        "leaf3": {
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:09",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.11"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:09",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.21"
+              ],
+              "inactive": []
+            }
+          }
+        },
+        "leaf4": {
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:01",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.11"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:01",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.21"
+              ],
+              "inactive": []
+            }
+          }
+        }
+      },
+      "after_macs": {
+        "leaf1": {
+          "00:00:00:00:00:21": {
+            "type": "local",
+            "intf": "eth-host11",
+            "ifindex": 4,
+            "uptime": "00:00:17",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 1,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          },
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:19",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [],
+              "inactive": [
+                "45.0.0.11"
+              ]
+            }
+          }
+        },
+        "leaf2": {
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:18",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [],
+              "inactive": [
+                "45.0.0.21"
+              ]
+            }
+          },
+          "00:00:00:00:00:11": {
+            "type": "local",
+            "intf": "eth-host21",
+            "ifindex": 4,
+            "uptime": "00:00:17",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 1,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          }
+        },
+        "leaf3": {
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:13",
+            "localSequence": 1,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          },
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:13",
+            "localSequence": 1,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          }
+        },
+        "leaf4": {
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:05",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          },
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:05",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          }
+        }
+      },
+      "controller_reachable": true,
+      "metrics_directory": "/home/frr/frr/tests/topotests/bgp_evpn_capstone/mobility_results/20261020T203722_021414Z",
+      "metrics_event": {
+        "id": "20261020T203722_021414Z",
+        "start_utc": "2026-10-20T20:37:22.021685+00:00",
+        "end_utc": "2026-10-20T20:37:26.032334+00:00",
+        "targets": {
+          "host11": "45.0.0.11",
+          "host21": "45.0.0.21"
+        },
+        "routers": [
+          "leaf1",
+          "leaf2",
+          "leaf3",
+          "leaf5"
+        ],
+        "warnings": [],
+        "raw_files": [
+          "routes_before.json",
+          "ping_host11.log",
+          "ping_host21.log",
+          "bgp_leaf1_eth-spine1.pcap",
+          "bgp_leaf1_eth-spine2.pcap",
+          "cpu_leaf1.log",
+          "bgp_leaf2_eth-spine1.pcap",
+          "bgp_leaf2_eth-spine2.pcap",
+          "cpu_leaf2.log",
+          "bgp_leaf3_eth-spine1.pcap",
+          "bgp_leaf3_eth-spine2.pcap",
+          "cpu_leaf3.log",
+          "bgp_leaf5_eth-spine1.pcap",
+          "bgp_leaf5_eth-spine2.pcap",
+          "cpu_leaf5.log",
+          "routes_after.json"
+        ],
+        "start_monotonic_ns": 20135710811376,
+        "cpu_daemon_pids": {
+          "leaf1": {
+            "bgpd": 48031,
+            "zebra": 48013
+          },
+          "leaf2": {
+            "bgpd": 48114,
+            "zebra": 48096
+          },
+          "leaf3": {
+            "bgpd": 48196,
+            "zebra": 48177
+          },
+          "leaf5": {
+            "bgpd": 48358,
+            "zebra": 48339
+          }
+        },
+        "end_monotonic_ns": 20139721400029,
+        "duration_seconds": 4.010589,
+        "error": null
+      }
+    },
+    {
+      "hosts": [
+        "host12",
+        "host22"
+      ],
+      "identity_moves": 2,
+      "before_hosts": [
+        {
+          "host": "host12",
+          "leaf": "leaf1",
+          "vtep": "10.0.0.1",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.12/24",
+          "mac": "00:00:00:00:00:12"
+        },
+        {
+          "host": "host22",
+          "leaf": "leaf2",
+          "vtep": "10.0.0.2",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.22/24",
+          "mac": "00:00:00:00:00:22"
+        }
+      ],
+      "after_hosts": [
+        {
+          "host": "host12",
+          "leaf": "leaf1",
+          "vtep": "10.0.0.1",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.22/24",
+          "mac": "00:00:00:00:00:22"
+        },
+        {
+          "host": "host22",
+          "leaf": "leaf2",
+          "vtep": "10.0.0.2",
+          "gateway": "45.0.0.1",
+          "ip": "45.0.0.12/24",
+          "mac": "00:00:00:00:00:12"
+        }
+      ],
+      "before_macs": {
+        "leaf1": {
+          "00:00:00:00:00:12": {
+            "type": "local",
+            "intf": "eth-host12",
+            "ifindex": 5,
+            "uptime": "00:00:20",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.12"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:18",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.22"
+              ],
+              "inactive": []
+            }
+          }
+        },
+        "leaf2": {
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:18",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.12"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:22": {
+            "type": "local",
+            "intf": "eth-host22",
+            "ifindex": 5,
+            "uptime": "00:00:19",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.22"
+              ],
+              "inactive": []
+            }
+          }
+        },
+        "leaf3": {
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:14",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.12"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:14",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.22"
+              ],
+              "inactive": []
+            }
+          }
+        },
+        "leaf4": {
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:07",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.12"
+              ],
+              "inactive": []
+            }
+          },
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:07",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [
+                "45.0.0.22"
+              ],
+              "inactive": []
+            }
+          }
+        }
+      },
+      "after_macs": {
+        "leaf1": {
+          "00:00:00:00:00:22": {
+            "type": "local",
+            "intf": "eth-host12",
+            "ifindex": 5,
+            "uptime": "00:00:22",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 1,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          },
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:24",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [],
+              "inactive": [
+                "45.0.0.12"
+              ]
+            }
+          }
+        },
+        "leaf2": {
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:23",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": {
+              "active": [],
+              "inactive": [
+                "45.0.0.22"
+              ]
+            }
+          },
+          "00:00:00:00:00:12": {
+            "type": "local",
+            "intf": "eth-host22",
+            "ifindex": 5,
+            "uptime": "00:00:22",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 1,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          }
+        },
+        "leaf3": {
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:18",
+            "localSequence": 1,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          },
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:18",
+            "localSequence": 1,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          }
+        },
+        "leaf4": {
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "uptime": "00:00:10",
+            "localSequence": 1,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          },
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "uptime": "00:00:10",
+            "localSequence": 1,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false,
+            "syncNeighCount": 0,
+            "neighbors": "none"
+          }
+        }
+      },
+      "controller_reachable": true,
+      "metrics_directory": "/home/frr/frr/tests/topotests/bgp_evpn_capstone/mobility_results/20261020T203727_377059Z",
+      "metrics_event": {
+        "id": "20261020T203727_377059Z",
+        "start_utc": "2026-10-20T20:37:27.377200+00:00",
+        "end_utc": "2026-10-20T20:37:31.038651+00:00",
+        "targets": {
+          "host12": "45.0.0.12",
+          "host22": "45.0.0.22"
+        },
+        "routers": [
+          "leaf1",
+          "leaf2",
+          "leaf3",
+          "leaf5"
+        ],
+        "warnings": [],
+        "raw_files": [
+          "routes_before.json",
+          "ping_host12.log",
+          "ping_host22.log",
+          "bgp_leaf1_eth-spine1.pcap",
+          "bgp_leaf1_eth-spine2.pcap",
+          "cpu_leaf1.log",
+          "bgp_leaf2_eth-spine1.pcap",
+          "bgp_leaf2_eth-spine2.pcap",
+          "cpu_leaf2.log",
+          "bgp_leaf3_eth-spine1.pcap",
+          "bgp_leaf3_eth-spine2.pcap",
+          "cpu_leaf3.log",
+          "bgp_leaf5_eth-spine1.pcap",
+          "bgp_leaf5_eth-spine2.pcap",
+          "cpu_leaf5.log",
+          "routes_after.json"
+        ],
+        "start_monotonic_ns": 20141066290509,
+        "cpu_daemon_pids": {
+          "leaf1": {
+            "bgpd": 48031,
+            "zebra": 48013
+          },
+          "leaf2": {
+            "bgpd": 48114,
+            "zebra": 48096
+          },
+          "leaf3": {
+            "bgpd": 48196,
+            "zebra": 48177
+          },
+          "leaf5": {
+            "bgpd": 48358,
+            "zebra": 48339
+          }
+        },
+        "end_monotonic_ns": 20144727717906,
+        "duration_seconds": 3.661427,
+        "error": null
+      }
+    }
+  ]
+}

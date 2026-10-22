@@ -1,0 +1,56 @@
+{
+  "id": "20261020T203722_021414Z",
+  "start_utc": "2026-10-20T20:37:22.021685+00:00",
+  "end_utc": "2026-10-20T20:37:26.032334+00:00",
+  "targets": {
+    "host11": "45.0.0.11",
+    "host21": "45.0.0.21"
+  },
+  "routers": [
+    "leaf1",
+    "leaf2",
+    "leaf3",
+    "leaf5"
+  ],
+  "warnings": [],
+  "raw_files": [
+    "routes_before.json",
+    "ping_host11.log",
+    "ping_host21.log",
+    "bgp_leaf1_eth-spine1.pcap",
+    "bgp_leaf1_eth-spine2.pcap",
+    "cpu_leaf1.log",
+    "bgp_leaf2_eth-spine1.pcap",
+    "bgp_leaf2_eth-spine2.pcap",
+    "cpu_leaf2.log",
+    "bgp_leaf3_eth-spine1.pcap",
+    "bgp_leaf3_eth-spine2.pcap",
+    "cpu_leaf3.log",
+    "bgp_leaf5_eth-spine1.pcap",
+    "bgp_leaf5_eth-spine2.pcap",
+    "cpu_leaf5.log",
+    "routes_after.json"
+  ],
+  "start_monotonic_ns": 20135710811376,
+  "cpu_daemon_pids": {
+    "leaf1": {
+      "bgpd": 48031,
+      "zebra": 48013
+    },
+    "leaf2": {
+      "bgpd": 48114,
+      "zebra": 48096
+    },
+    "leaf3": {
+      "bgpd": 48196,
+      "zebra": 48177
+    },
+    "leaf5": {
+      "bgpd": 48358,
+      "zebra": 48339
+    }
+  },
+  "end_monotonic_ns": 20139721400029,
+  "duration_seconds": 4.010589,
+  "error": null
+}

@@ -1,0 +1,4966 @@
+{
+  "utc": "2026-10-20T20:37:27.377221+00:00",
+  "routers": {
+    "leaf1": {
+      "evpn_type2": {
+        "10.0.0.1:2": {},
+        "10.0.0.1:500": {},
+        "10.0.0.1:1000": {
+          "rd": "10.0.0.1:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "leaf1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "ipLen": 32,
+                  "ip": "45.0.0.12",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000 RT:500:500 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "leaf1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "leaf1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "ipLen": 32,
+                  "ip": "45.0.0.21",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000 RT:500:500 Rmac:aa:d7:51:1c:5c:46 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "leaf1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.2:500": {},
+        "10.0.0.2:1000": {
+          "rd": "10.0.0.2:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "ipLen": 32,
+                  "ip": "45.0.0.11",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "ipLen": 32,
+                  "ip": "45.0.0.11",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "ipLen": 32,
+                  "ip": "45.0.0.22",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "ipLen": 32,
+                  "ip": "45.0.0.22",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.3:500": {},
+        "10.0.0.3:1000": {
+          "rd": "10.0.0.3:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:31]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:31]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:31",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:31",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:32]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:32]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:32",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:32",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.4:500": {},
+        "10.0.0.4:1000": {
+          "rd": "10.0.0.4:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:41]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:41]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:42]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:42]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.5:500": {},
+        "10.0.0.5:2000": {
+          "rd": "10.0.0.5:2000",
+          "[2]:[0]:[48]:[00:00:00:00:00:51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:2000:2000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:2000:2000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "ipLen": 32,
+                  "ip": "20.0.0.51",
+                  "weight": 0,
+                  "peerId": "fe80::47a:e8ff:fe89:4f1e",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:2000:2000 ET:8 Rmac:e2:19:11:b1:da:07"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "ipLen": 32,
+                  "ip": "20.0.0.51",
+                  "weight": 0,
+                  "peerId": "fe80::9472:4ff:febb:833b",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:2000:2000 ET:8 Rmac:e2:19:11:b1:da:07"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "numPrefix": 14,
+        "numPaths": 24
+      },
+      "vrf_routes": {
+        "20.0.0.0/24": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 49,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:07",
+            "prefix": "20.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 49,
+            "receivedNexthopGroupId": 49,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "20.0.0.51/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 49,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:05",
+            "prefix": "20.0.0.51/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 49,
+            "receivedNexthopGroupId": 49,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.0/24": [
+          {
+            "protocol": "connected",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 10,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:22",
+            "prefix": "45.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 10,
+            "receivedNexthopGroupId": 10,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 9,
+                "interfaceName": "br1000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.1/32": [
+          {
+            "protocol": "local",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 10,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:22",
+            "prefix": "45.0.0.1/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 10,
+            "receivedNexthopGroupId": 10,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 9,
+                "interfaceName": "br1000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.11/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 42,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:02",
+            "prefix": "45.0.0.11/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 42,
+            "receivedNexthopGroupId": 42,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.22/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 42,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:01",
+            "prefix": "45.0.0.22/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 42,
+            "receivedNexthopGroupId": 42,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      },
+      "evpn_macs": {
+        "numMacs": 8,
+        "macs": {
+          "00:00:00:00:00:41": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.4",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:31": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.3",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:42": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.4",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:21": {
+            "type": "local",
+            "intf": "eth-host11",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 1,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:32": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.3",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:12": {
+            "type": "local",
+            "intf": "eth-host12",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          }
+        }
+      }
+    },
+    "leaf2": {
+      "evpn_type2": {
+        "10.0.0.1:500": {},
+        "10.0.0.1:1000": {
+          "rd": "10.0.0.1:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "ipLen": 32,
+                  "ip": "45.0.0.12",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "ipLen": 32,
+                  "ip": "45.0.0.12",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "ipLen": 32,
+                  "ip": "45.0.0.21",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "ipLen": 32,
+                  "ip": "45.0.0.21",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.2:3": {},
+        "10.0.0.2:500": {},
+        "10.0.0.2:1000": {
+          "rd": "10.0.0.2:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "leaf2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "ipLen": 32,
+                  "ip": "45.0.0.11",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000 RT:500:500 Rmac:ca:73:4c:4d:f5:e9 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "leaf2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "leaf2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "ipLen": 32,
+                  "ip": "45.0.0.22",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000 RT:500:500 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "leaf2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.3:500": {},
+        "10.0.0.3:1000": {
+          "rd": "10.0.0.3:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:31]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:31]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:31",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:31",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:32]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:32]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:32",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:32",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.4:500": {},
+        "10.0.0.4:1000": {
+          "rd": "10.0.0.4:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:41]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:41]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:42]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:42]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.5:500": {},
+        "10.0.0.5:2000": {
+          "rd": "10.0.0.5:2000",
+          "[2]:[0]:[48]:[00:00:00:00:00:51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:2000:2000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:2000:2000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "ipLen": 32,
+                  "ip": "20.0.0.51",
+                  "weight": 0,
+                  "peerId": "fe80::9022:56ff:fe25:7e39",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:2000:2000 ET:8 Rmac:e2:19:11:b1:da:07"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "ipLen": 32,
+                  "ip": "20.0.0.51",
+                  "weight": 0,
+                  "peerId": "fe80::80fe:6dff:fe41:f134",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:2000:2000 ET:8 Rmac:e2:19:11:b1:da:07"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "numPrefix": 14,
+        "numPaths": 24
+      },
+      "vrf_routes": {
+        "20.0.0.0/24": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 48,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:07",
+            "prefix": "20.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 48,
+            "receivedNexthopGroupId": 48,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "20.0.0.51/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 48,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:05",
+            "prefix": "20.0.0.51/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 48,
+            "receivedNexthopGroupId": 48,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.0/24": [
+          {
+            "protocol": "connected",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 10,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:21",
+            "prefix": "45.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 10,
+            "receivedNexthopGroupId": 10,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 9,
+                "interfaceName": "br1000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.1/32": [
+          {
+            "protocol": "local",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 10,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:21",
+            "prefix": "45.0.0.1/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 10,
+            "receivedNexthopGroupId": 10,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 9,
+                "interfaceName": "br1000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.12/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 41,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:01",
+            "prefix": "45.0.0.12/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 41,
+            "receivedNexthopGroupId": 41,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.21/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 41,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:02",
+            "prefix": "45.0.0.21/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 41,
+            "receivedNexthopGroupId": 41,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      },
+      "evpn_macs": {
+        "numMacs": 8,
+        "macs": {
+          "00:00:00:00:00:41": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.4",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:31": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.3",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:42": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.4",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "localSequence": 0,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:11": {
+            "type": "local",
+            "intf": "eth-host21",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 1,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:22": {
+            "type": "local",
+            "intf": "eth-host22",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:32": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.3",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          }
+        }
+      }
+    },
+    "leaf3": {
+      "evpn_type2": {
+        "10.0.0.1:500": {},
+        "10.0.0.1:1000": {
+          "rd": "10.0.0.1:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "ipLen": 32,
+                  "ip": "45.0.0.12",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "ipLen": 32,
+                  "ip": "45.0.0.12",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "ipLen": 32,
+                  "ip": "45.0.0.21",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "ipLen": 32,
+                  "ip": "45.0.0.21",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.2:500": {},
+        "10.0.0.2:1000": {
+          "rd": "10.0.0.2:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "ipLen": 32,
+                  "ip": "45.0.0.11",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "ipLen": 32,
+                  "ip": "45.0.0.11",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "ipLen": 32,
+                  "ip": "45.0.0.22",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "ipLen": 32,
+                  "ip": "45.0.0.22",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.3:4": {},
+        "10.0.0.3:500": {},
+        "10.0.0.3:1000": {
+          "rd": "10.0.0.3:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:31]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:31]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:31",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "leaf3",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:32]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:32]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:32",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:1000:1000"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "leaf3",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.4:500": {},
+        "10.0.0.4:1000": {
+          "rd": "10.0.0.4:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:41]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:41]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:42]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:42]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.5:500": {},
+        "10.0.0.5:2000": {
+          "rd": "10.0.0.5:2000",
+          "[2]:[0]:[48]:[00:00:00:00:00:51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:2000:2000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:2000:2000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "ipLen": 32,
+                  "ip": "20.0.0.51",
+                  "weight": 0,
+                  "peerId": "fe80::78b4:abff:fee0:641c",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:2000:2000 ET:8 Rmac:e2:19:11:b1:da:07"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "ipLen": 32,
+                  "ip": "20.0.0.51",
+                  "weight": 0,
+                  "peerId": "fe80::98af:1dff:fefd:3f9d",
+                  "path": "65000 65015",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:2000:2000 ET:8 Rmac:e2:19:11:b1:da:07"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "numPrefix": 14,
+        "numPaths": 26
+      },
+      "vrf_routes": {
+        "20.0.0.0/24": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 46,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:07",
+            "prefix": "20.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 46,
+            "receivedNexthopGroupId": 46,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "20.0.0.51/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 46,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:05",
+            "prefix": "20.0.0.51/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 46,
+            "receivedNexthopGroupId": 46,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.5",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.0/24": [
+          {
+            "protocol": "connected",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 10,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:19",
+            "prefix": "45.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 10,
+            "receivedNexthopGroupId": 10,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 9,
+                "interfaceName": "br1000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.1/32": [
+          {
+            "protocol": "local",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 10,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:19",
+            "prefix": "45.0.0.1/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 10,
+            "receivedNexthopGroupId": 10,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 9,
+                "interfaceName": "br1000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.11/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 39,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:02",
+            "prefix": "45.0.0.11/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 39,
+            "receivedNexthopGroupId": 39,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.12/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 37,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:01",
+            "prefix": "45.0.0.12/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 37,
+            "receivedNexthopGroupId": 37,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.21/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 37,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:02",
+            "prefix": "45.0.0.21/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 37,
+            "receivedNexthopGroupId": 37,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.22/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 39,
+            "vrfId": 6,
+            "vrfName": "VRF500",
+            "uptime": "00:00:01",
+            "prefix": "45.0.0.22/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 39,
+            "receivedNexthopGroupId": 39,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 7,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      },
+      "evpn_macs": {
+        "numMacs": 8,
+        "macs": {
+          "00:00:00:00:00:41": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.4",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:31": {
+            "type": "local",
+            "intf": "eth-host31",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:42": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.4",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:21": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "localSequence": 2,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:22": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:11": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.2",
+            "localSequence": 2,
+            "remoteSequence": 1,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:12": {
+            "type": "remote",
+            "remoteVtep": "10.0.0.1",
+            "localSequence": 1,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          },
+          "00:00:00:00:00:32": {
+            "type": "local",
+            "intf": "eth-host32",
+            "localSequence": 0,
+            "remoteSequence": 0,
+            "detectionCount": 0,
+            "isDuplicate": false
+          }
+        }
+      }
+    },
+    "leaf5": {
+      "evpn_type2": {
+        "10.0.0.1:500": {},
+        "10.0.0.1:1000": {
+          "rd": "10.0.0.1:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:12]:[32]:[45.0.0.12]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "ipLen": 32,
+                  "ip": "45.0.0.12",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:12",
+                  "ipLen": 32,
+                  "ip": "45.0.0.12",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:21]:[32]:[45.0.0.21]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "ipLen": 32,
+                  "ip": "45.0.0.21",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:21",
+                  "ipLen": 32,
+                  "ip": "45.0.0.21",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65011",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:aa:d7:51:1c:5c:46"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.1",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.2:500": {},
+        "10.0.0.2:1000": {
+          "rd": "10.0.0.2:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8 MM:1"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:11]:[32]:[45.0.0.11]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "ipLen": 32,
+                  "ip": "45.0.0.11",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:11",
+                  "ipLen": 32,
+                  "ip": "45.0.0.11",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 MM:1 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:22]:[32]:[45.0.0.22]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Router ID",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "ipLen": 32,
+                  "ip": "45.0.0.22",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:22",
+                  "ipLen": 32,
+                  "ip": "45.0.0.22",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65012",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:500:500 RT:1000:1000 ET:8 Rmac:ca:73:4c:4d:f5:e9"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.2",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 4
+        },
+        "10.0.0.3:500": {},
+        "10.0.0.3:1000": {
+          "rd": "10.0.0.3:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:31]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:31]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:31",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:31",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:32]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:32]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:32",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:32",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65013",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.3",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.4:500": {},
+        "10.0.0.4:1000": {
+          "rd": "10.0.0.4:1000",
+          "[2]:[0]:[48]:[00:00:00:00:00:41]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:41]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:41",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:42]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:42]",
+            "prefixLen": 352,
+            "pathCount": 2,
+            "multiPathCount": 2,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "Older Path",
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::30f1:5cff:fea4:c213",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine2",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "valid": true,
+                  "multipath": true,
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:42",
+                  "weight": 0,
+                  "peerId": "fe80::38a0:6eff:fe26:e197",
+                  "path": "65000 65014",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "RT:1000:1000 ET:8"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.4",
+                      "hostname": "spine1",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "10.0.0.5:2": {},
+        "10.0.0.5:500": {},
+        "10.0.0.5:2000": {
+          "rd": "10.0.0.5:2000",
+          "[2]:[0]:[48]:[00:00:00:00:00:51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:2000:2000"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "leaf5",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]": {
+            "prefix": "[2]:[0]:[48]:[00:00:00:00:00:51]:[32]:[20.0.0.51]",
+            "prefixLen": 352,
+            "pathCount": 1,
+            "multiPathCount": 1,
+            "paths": [
+              [
+                {
+                  "valid": true,
+                  "bestpath": true,
+                  "selectionReason": "First path received",
+                  "pathFrom": "external",
+                  "routeType": 2,
+                  "ethTag": 0,
+                  "macLen": 48,
+                  "mac": "00:00:00:00:00:51",
+                  "ipLen": 32,
+                  "ip": "20.0.0.51",
+                  "weight": 32768,
+                  "peerId": "(unspec)",
+                  "path": "",
+                  "origin": "IGP",
+                  "extendedCommunity": {
+                    "string": "ET:8 RT:2000:2000 RT:500:500 Rmac:e2:19:11:b1:da:07"
+                  },
+                  "nexthops": [
+                    {
+                      "ip": "10.0.0.5",
+                      "hostname": "leaf5",
+                      "afi": "ipv4",
+                      "used": true
+                    }
+                  ]
+                }
+              ]
+            ],
+            "flags": {
+              "bestPathExists": true
+            }
+          },
+          "numRoutes": 2
+        },
+        "numPrefix": 14,
+        "numPaths": 26
+      },
+      "vrf_routes": {
+        "20.0.0.0/24": [
+          {
+            "protocol": "connected",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 9,
+            "vrfId": 5,
+            "vrfName": "VRF500",
+            "uptime": "00:00:16",
+            "prefix": "20.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 9,
+            "receivedNexthopGroupId": 9,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 8,
+                "interfaceName": "br2000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "20.0.0.1/32": [
+          {
+            "protocol": "local",
+            "selected": true,
+            "destSelected": true,
+            "distance": 0,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 9,
+            "vrfId": 5,
+            "vrfName": "VRF500",
+            "uptime": "00:00:16",
+            "prefix": "20.0.0.1/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 1,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 9,
+            "receivedNexthopGroupId": 9,
+            "nexthops": [
+              {
+                "flags": 3,
+                "fib": true,
+                "directlyConnected": true,
+                "interfaceIndex": 8,
+                "interfaceName": "br2000",
+                "active": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.0/24": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 53,
+            "vrfId": 5,
+            "vrfName": "VRF500",
+            "uptime": "00:00:07",
+            "prefix": "45.0.0.0/24",
+            "prefixLen": 24,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 8,
+            "internalNextHopActiveNum": 8,
+            "internalNextHopFibInstalledNum": 4,
+            "installedNexthopGroupId": 53,
+            "receivedNexthopGroupId": 53,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.3",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.3",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.4",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.4",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.11/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 55,
+            "vrfId": 5,
+            "vrfName": "VRF500",
+            "uptime": "00:00:02",
+            "prefix": "45.0.0.11/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 55,
+            "receivedNexthopGroupId": 55,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.12/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 54,
+            "vrfId": 5,
+            "vrfName": "VRF500",
+            "uptime": "00:00:01",
+            "prefix": "45.0.0.12/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 54,
+            "receivedNexthopGroupId": 54,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.21/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 54,
+            "vrfId": 5,
+            "vrfName": "VRF500",
+            "uptime": "00:00:02",
+            "prefix": "45.0.0.21/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 54,
+            "receivedNexthopGroupId": 54,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.1",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ],
+        "45.0.0.22/32": [
+          {
+            "protocol": "bgp",
+            "selected": true,
+            "destSelected": true,
+            "distance": 20,
+            "metric": 0,
+            "installed": true,
+            "nexthopGroupId": 55,
+            "vrfId": 5,
+            "vrfName": "VRF500",
+            "uptime": "00:00:01",
+            "prefix": "45.0.0.22/32",
+            "prefixLen": 32,
+            "table": 500,
+            "internalStatus": 16,
+            "internalFlags": 8,
+            "internalNextHopNum": 2,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopFibInstalledNum": 1,
+            "installedNexthopGroupId": 55,
+            "receivedNexthopGroupId": 55,
+            "nexthops": [
+              {
+                "flags": 267,
+                "fib": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              },
+              {
+                "flags": 281,
+                "duplicate": true,
+                "ip": "10.0.0.2",
+                "afi": "ipv4",
+                "interfaceIndex": 6,
+                "interfaceName": "br500",
+                "active": true,
+                "onLink": true,
+                "weight": 1
+              }
+            ]
+          }
+        ]
+      },
+      "evpn_macs": {}
+    }
+  }
+}
