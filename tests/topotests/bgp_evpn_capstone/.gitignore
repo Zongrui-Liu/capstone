@@ -1,0 +1,8 @@
+# Ignore mobility results
+mobility_results/
+
+# Ignore packet captures in this directory and below
+*.pcap
+
+# Ignore Python cache
+__pycache__/
