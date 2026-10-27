@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Live EVPN Type-2 Capture Counts</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #091018; --panel: #111d2a; --border: #283d51;
+            --text: #e6f2ff; --muted: #aec3d8;
+            --advertisement: #39d0ff; --withdrawal: #ffb36b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 28px; background: var(--bg); color: var(--text);
+            font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+        }
+        main { max-width: 1320px; margin: auto; }
+        header { display: flex; gap: 20px; align-items: flex-start; justify-content: space-between; }
+        h1 { margin: 0 0 5px; font-size: 25px; font-weight: 600; }
+        h2 { margin: 0; font-size: 17px; font-weight: 600; }
+        p { margin: 4px 0; }
+        .muted { color: var(--muted); }
+        .status {
+            display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+            border: 1px solid var(--border); border-radius: 8px; white-space: nowrap;
+        }
+        .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #a4b6c8; }
+        .status[data-state="running"] .status-dot { background: #53d696; }
+        .status[data-state="error"] .status-dot,
+        .status[data-state="disconnected"] .status-dot { background: #ff8b8b; }
+        .status[data-state="stale"] .status-dot { background: var(--withdrawal); }
+        nav { margin-top: 15px; }
+        a { color: #8ddfff; }
+        .legend { display: flex; flex-wrap: wrap; gap: 20px; margin: 24px 0 12px; }
+        .legend span { display: inline-flex; align-items: center; gap: 8px; }
+        .swatch { width: 24px; border-top: 3px solid var(--advertisement); }
+        .swatch.withdrawal { border-color: var(--withdrawal); border-top-style: dashed; }
+        .panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+        .panel { min-width: 0; padding: 18px 16px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+        .panel-total { border-color: #45627e; }
+        .scope { font-size: 13px; color: var(--muted); margin: 3px 0 19px; }
+        .counts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .metric-label { color: var(--muted); font-size: 13px; }
+        .metric-number { display: block; font-size: 34px; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .metric-line { display: inline-block; width: 15px; margin-right: 5px; border-top: 2px solid var(--advertisement); vertical-align: middle; }
+        .metric-line.withdrawal { border-color: var(--withdrawal); border-top-style: dashed; }
+        .records { margin-top: 10px; color: var(--muted); font-size: 13px; }
+        .records strong { color: var(--text); font-variant-numeric: tabular-nums; }
+        .chart { width: 100%; height: 255px; display: block; margin-top: 16px; }
+        .chart text { fill: var(--muted); font: 11px "Segoe UI", system-ui, sans-serif; }
+        .chart .grid { stroke: var(--border); stroke-width: 1; }
+        .chart .advertisement { stroke: var(--advertisement); }
+        .chart .withdrawal { stroke: var(--withdrawal); stroke-dasharray: 6 4; }
+        .chart .series { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+        .table-wrap { overflow-x: auto; margin-top: 23px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        caption { text-align: left; font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-size: 13px; font-weight: 400; }
+        .number { text-align: right; font-variant-numeric: tabular-nums; }
+        .total-row { font-weight: 600; }
+        footer { margin-top: 19px; font-size: 13px; color: var(--muted); }
+        .run { overflow-wrap: anywhere; margin-top: 7px; }
+        .error { color: #ffb7b7; overflow-wrap: anywhere; }
+        [hidden] { display: none !important; }
+        @media (max-width: 1020px) { .panels { grid-template-columns: 1fr; } .chart { height: 230px; } }
+        @media (max-width: 560px) {
+            body { padding: 15px; } header { flex-direction: column; gap: 12px; }
+            h1 { font-size: 22px; } .metric-number { font-size: 30px; } th, td { padding: 9px 7px; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <div>
+            <h1>Live EVPN Type-2 counts</h1>
+            <p class="muted">Advertisements and withdrawals observed at both capture points</p>
+        </div>
+        <div class="status" id="status" data-state="waiting" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="status-text">Waiting for capture</span>
+        </div>
+    </header>
+    <nav><a href="/route-chart">Live BGP Route Chart</a> &nbsp;·&nbsp; <a href="/">Network topology</a></nav>
+    <div class="legend" aria-label="Chart legend">
+        <span><i class="swatch" aria-hidden="true"></i>Advertisements</span>
+        <span><i class="swatch withdrawal" aria-hidden="true"></i>Withdrawals</span>
+        <span class="muted">Cumulative route transmissions</span>
+    </div>
+    <div class="panels" id="panels"></div>
+    <div class="table-wrap">
+        <table>
+            <caption>Capture-point totals</caption>
+            <thead><tr><th scope="col">Capture point</th><th scope="col" class="number">Advertisements</th><th scope="col" class="number">Withdrawals</th><th scope="col" class="number">All Type-2 records</th></tr></thead>
+            <tbody id="count-table"></tbody>
+        </table>
+    </div>
+    <footer>
+        <p>Each captured Type-2 route advertisement or withdrawal counts once. MAC-only, MAC/IP, forwarded copies, and both directions are included.</p>
+        <p>These are traffic counts, not route-table sizes or unique robot moves. The combined total adds observations from both spines.</p>
+        <p id="last-update">Start the capture test to receive live counts.</p>
+        <p class="run" id="run-id"></p>
+        <p class="error" id="error-text" role="alert" hidden></p>
+    </footer>
+</main>
+<script>
+    'use strict';
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const panels = new Map();
+    const numberFormat = new Intl.NumberFormat();
+    let latest = null;
+
+    function svgNode(name, attributes, text) {
+        const node = document.createElementNS(SVG_NS, name);
+        for (const key of Object.keys(attributes)) node.setAttribute(key, attributes[key]);
+        if (text !== undefined) node.textContent = text;
+        return node;
+    }
+
+    function createPanel(key, title, subtitle) {
+        const section = document.createElement('section');
+        section.className = key === 'total' ? 'panel panel-total' : 'panel';
+        const heading = document.createElement('h2');
+        heading.textContent = title;
+        const scope = document.createElement('p');
+        scope.className = 'scope'; scope.textContent = subtitle;
+        const counts = document.createElement('div'); counts.className = 'counts';
+        const values = {};
+        for (const kind of ['advertisement', 'withdrawal']) {
+            const metric = document.createElement('div');
+            const label = document.createElement('span'); label.className = 'metric-label';
+            const line = document.createElement('i'); line.className = 'metric-line ' + kind;
+            line.setAttribute('aria-hidden', 'true'); label.appendChild(line);
+            label.appendChild(document.createTextNode(kind === 'advertisement' ? 'Advertisements' : 'Withdrawals'));
+            const value = document.createElement('strong'); value.className = 'metric-number'; value.textContent = '—';
+            values[kind] = value; metric.append(label, value); counts.appendChild(metric);
+        }
+        const records = document.createElement('p'); records.className = 'records';
+        records.appendChild(document.createTextNode('All Type-2 records '));
+        const all = document.createElement('strong'); all.textContent = '—'; records.appendChild(all);
+        const chart = svgNode('svg', {class: 'chart', role: 'img', 'aria-label': title + ' cumulative Type-2 route transmissions'});
+        section.append(heading, scope, counts, records, chart);
+        document.getElementById('panels').appendChild(section);
+        const panel = {section, values, all, chart}; panels.set(key, panel);
+        return panel;
+    }
+
+    function countsFor(sample, key) {
+        if (key === 'total') return sample.total;
+        return sample.by_capture_point[key] || {advertisement: 0, withdrawal: 0};
+    }
+
+    function drawChart(panel, key, data) {
+        const svg = panel.chart;
+        const width = Math.max(230, Math.round(svg.getBoundingClientRect().width));
+        const height = Math.round(svg.getBoundingClientRect().height);
+        const left = 47, right = 15, top = 20, bottom = 43;
+        const plotWidth = width - left - right, plotHeight = height - top - bottom;
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        svg.replaceChildren();
+        const history = data.history || [];
+        let maximum = 0;
+        for (const sample of history) {
+            const counts = countsFor(sample, key);
+            maximum = Math.max(maximum, counts.advertisement, counts.withdrawal);
+        }
+        const step = Math.max(1, Math.ceil(maximum / 4));
+        const ceiling = step * 4;
+        const beginning = history.length ? history[0].timestamp_epoch : 0;
+        const end = history.length ? history[history.length - 1].timestamp_epoch : 1;
+        const duration = Math.max(1, end - beginning);
+        const x = value => left + (value - beginning) / duration * plotWidth;
+        const y = value => top + plotHeight - value / ceiling * plotHeight;
+        svg.appendChild(svgNode('title', {}, key + ': cumulative advertisements and withdrawals'));
+        for (let tick = 0; tick <= 4; tick++) {
+            const value = tick * step;
+            svg.appendChild(svgNode('line', {x1: left, x2: width - right, y1: y(value), y2: y(value), class: 'grid'}));
+            svg.appendChild(svgNode('text', {x: left - 7, y: y(value) + 4, 'text-anchor': 'end'}, numberFormat.format(value)));
+        }
+        for (let tick = 0; tick <= 3; tick++) {
+            const seconds = duration * tick / 3;
+            const anchor = tick === 0 ? 'start' : tick === 3 ? 'end' : 'middle';
+            const elapsed = history.length ? beginning + seconds - data.started_epoch : seconds;
+            svg.appendChild(svgNode('text', {x: left + plotWidth * tick / 3, y: height - 24, 'text-anchor': anchor}, elapsed.toFixed(1)));
+        }
+        svg.appendChild(svgNode('text', {x: left, y: 11}, 'Route transmissions'));
+        svg.appendChild(svgNode('text', {x: left + plotWidth / 2, y: height - 5, 'text-anchor': 'middle'}, 'Seconds since capture start'));
+        for (const kind of ['advertisement', 'withdrawal']) {
+            const points = [];
+            for (const sample of history) points.push(`${x(sample.timestamp_epoch)},${y(countsFor(sample, key)[kind])}`);
+            const line = svgNode('polyline', {points: points.join(' '), class: 'series ' + kind});
+            svg.appendChild(line);
+            if (history.length) {
+                const last = history[history.length - 1];
+                svg.appendChild(svgNode('circle', {cx: x(last.timestamp_epoch), cy: y(countsFor(last, key)[kind]), r: 3, fill: kind === 'advertisement' ? 'var(--advertisement)' : 'var(--withdrawal)'}));
+            }
+        }
+    }
+
+    function updateStatus(state, text) {
+        document.getElementById('status').dataset.state = state;
+        document.getElementById('status-text').textContent = text;
+    }
+
+    function addTableRow(label, counts, isTotal) {
+        const row = document.createElement('tr'); if (isTotal) row.className = 'total-row';
+        const name = document.createElement('th'); name.scope = 'row'; name.textContent = label; row.appendChild(name);
+        const values = [counts.advertisement, counts.withdrawal, counts.advertisement + counts.withdrawal];
+        for (const value of values) {
+            const cell = document.createElement('td'); cell.className = 'number'; cell.textContent = numberFormat.format(value); row.appendChild(cell);
+        }
+        document.getElementById('count-table').appendChild(row);
+    }
+
+    function render(data) {
+        latest = data;
+        const points = Object.keys(data.current.by_capture_point).sort();
+        if (!points.length) points.push('spine1', 'spine2');
+        const keys = ['total', ...points];
+        for (const [key, panel] of panels) {
+            if (!keys.includes(key)) { panel.section.remove(); panels.delete(key); }
+        }
+        document.getElementById('count-table').replaceChildren();
+        for (const key of keys) {
+            const title = key === 'total' ? 'Combined total' : key;
+            const subtitle = key === 'total' ? 'All capture points added together' : 'All captured leaf links · both directions';
+            const panel = panels.get(key) || createPanel(key, title, subtitle);
+            const counts = countsFor(data.current, key);
+            for (const kind of ['advertisement', 'withdrawal']) panel.values[kind].textContent = data.run_id ? numberFormat.format(counts[kind]) : '—';
+            panel.all.textContent = data.run_id ? numberFormat.format(counts.advertisement + counts.withdrawal) : '—';
+            drawChart(panel, key, data);
+            addTableRow(title, counts, key === 'total');
+        }
+        const now = Date.now() / 1000;
+        if (data.status === 'waiting') updateStatus('waiting', 'Waiting for capture');
+        else if (data.status === 'error') updateStatus('error', 'Capture decoder error');
+        else if (data.status === 'stopped') updateStatus('stopped', 'Capture stopped · final counts');
+        else if (now - data.updated_epoch > 5) updateStatus('stale', 'Capture heartbeat missing');
+        else updateStatus('running', 'Capture running · live counts');
+        document.getElementById('last-update').textContent = data.updated_epoch
+            ? 'Last update: ' + new Date(data.updated_epoch * 1000).toLocaleTimeString() + ' · Display refresh: 0.5 s'
+            : 'Start the capture test to receive live counts.';
+        document.getElementById('run-id').textContent = data.run_id ? 'Capture: ' + data.run_id : '';
+        const error = document.getElementById('error-text');
+        error.hidden = !data.errors.length; error.textContent = data.errors.join(' · ');
+    }
+
+    async function refreshCounts() {
+        try {
+            const response = await fetch('/api/type2-counts', {cache: 'no-store'});
+            if (!response.ok) throw new Error('Counter endpoint returned ' + response.status);
+            render(await response.json());
+        } catch (error) {
+            updateStatus('disconnected', 'Disconnected from visualizer');
+        } finally {
+            window.setTimeout(refreshCounts, 500);
+        }
+    }
+
+    const resize = new ResizeObserver(() => {
+        if (latest) for (const [key, panel] of panels) drawChart(panel, key, latest);
+    });
+    resize.observe(document.getElementById('panels'));
+    refreshCounts();
+</script>
+</body>
+</html>
