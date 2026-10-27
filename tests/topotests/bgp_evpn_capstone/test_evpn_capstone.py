@@ -1385,6 +1385,18 @@ def test_evpn_multiple_host_pairs_mobility():
         logger.info("Multiple-pair mobility report: %s", report_path)
 
 
+def test_evpn_type2_mobility_capture():
+    """Capture Type-2 advertisements and withdrawals in the existing fabric."""
+
+    # Import here because test_evpn_capture already imports this module.
+    # This avoids a circular import during module initialization.
+    from bgp_evpn_capstone import test_evpn_capture as test_capture
+
+    # Run the capture procedure using the topology created by our setup_module.
+    # It moves host11/21 and host12/22 and analyzes the captured traffic.
+    test_capture.test_evpn_type2_mobility_capture()
+
+
 if __name__ == "__main__":
     args = ["-s"] + sys.argv[1:]
     sys.exit(pytest.main(args))
