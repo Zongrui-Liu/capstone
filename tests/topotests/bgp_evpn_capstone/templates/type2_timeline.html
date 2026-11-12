@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVPN Type-2 Capture Timeline</title>
+<style>
+:root { color-scheme:dark; --bg:#091018; --panel:#111d2a; --line:#2b4155; --text:#e6f2ff; --muted:#a9bfd3; --ad:#39d0ff; --wd:#ffb36b; }
+* { box-sizing:border-box; }
+body { margin:0; padding:28px; background:var(--bg); color:var(--text); font:14px/1.5 "Segoe UI",system-ui,sans-serif; }
+main { max-width:1500px; margin:auto; }
+header { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
+h1 { margin:0; font-size:27px; font-weight:600; letter-spacing:-.4px; }
+h2 { margin:0; font-size:17px; font-weight:600; }
+p { margin:5px 0; }
+.muted, small { color:var(--muted); }
+.badge { border:1px solid #345a56; border-radius:20px; padding:7px 12px; color:#9fe3c2; white-space:nowrap; }
+.filters { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; padding:17px; background:var(--panel); border:1px solid var(--line); border-radius:12px; margin:22px 0 12px; }
+label { display:flex; flex-direction:column; gap:5px; color:var(--muted); font-size:12px; }
+select, input, button { font:inherit; color:var(--text); background:#0c1520; border:1px solid #38516a; border-radius:6px; padding:8px 10px; }
+select { max-width:270px; min-width:135px; }
+input { width:115px; }
+button { cursor:pointer; }
+button:hover { background:#1d3246; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--ad); outline-offset:2px; }
+.tools { display:flex; flex-wrap:wrap; gap:10px 20px; align-items:center; margin:12px 0 18px; }
+.tools .spacer { flex:1; }
+.legend { display:inline-flex; gap:7px; align-items:center; }
+.swatch { width:22px; border-top:3px solid var(--ad); }
+.swatch.wd { border-color:var(--wd); border-top-style:dashed; }
+.panels { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.panel { min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:17px; }
+.panel:first-child { border-color:#4c6b84; }
+.counts { display:flex; gap:25px; margin:15px 0 5px; }
+.counts div { flex:1; }
+.counts span { font-size:12px; color:var(--muted); }
+.counts strong { display:block; font-size:32px; line-height:1.25; font-weight:600; font-variant-numeric:tabular-nums; }
+svg { display:block; width:100%; height:255px; margin-top:5px; }
+svg text { fill:var(--muted); font:11px "Segoe UI",system-ui,sans-serif; }
+svg .grid { stroke:var(--line); stroke-width:1; }
+svg .series { fill:none; stroke-width:2.3; stroke-linejoin:miter; }
+svg .marker { stroke:#71839a; stroke-width:1; stroke-dasharray:2 5; opacity:.6; }
+svg .host-marker { stroke:#e9a0ff; stroke-width:1.4; stroke-dasharray:3 3; opacity:.9; }
+.hover { margin:14px 0; padding:10px 13px; min-height:43px; background:#101b27; border-left:3px solid var(--ad); color:var(--muted); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.table-head { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin:24px 0 10px; }
+.pager { display:flex; align-items:center; gap:10px; }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:570px; }
+table { width:100%; border-collapse:collapse; white-space:nowrap; font-size:12px; }
+th { text-align:left; color:var(--muted); background:#132233; position:sticky; top:0; z-index:1; font-weight:500; }
+th, td { padding:10px 11px; border-bottom:1px solid #25374a; }
+tbody tr { cursor:pointer; }
+tbody tr:hover, tbody tr[aria-selected="true"] { background:#1b3043; }
+.mono { font-family:Consolas,"SFMono-Regular",monospace; font-variant-numeric:tabular-nums; }
+.event-advertisement { color:var(--ad); }
+.event-withdrawal { color:var(--wd); }
+.detail { margin-top:12px; padding:15px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+.detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 20px; }
+.detail-grid div { overflow-wrap:anywhere; }
+.detail-grid strong { display:block; color:var(--muted); font-size:11px; font-weight:400; }
+details { margin-top:20px; color:var(--muted); padding:14px 16px; border:1px solid var(--line); border-radius:10px; }
+summary { cursor:pointer; color:var(--text); }
+details p { margin-top:10px; }
+.error { color:#ffaaa2; }
+footer { margin-top:15px; color:var(--muted); font-size:12px; }
+[hidden] { display:none !important; }
+@media(max-width:1100px) { .panels { grid-template-columns:1fr; } svg { height:280px; } .detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { body { padding:15px; } header { flex-direction:column; gap:10px; } h1 { font-size:23px; } .filters { gap:10px; padding:12px; } label { flex:1; } select { min-width:120px; max-width:100%; } .detail-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><h1>EVPN Type-2 capture timeline</h1><p class="muted">Advertisements and withdrawals plotted at recorded packet timestamps</p><p class="muted" id="method"></p><p class="muted mono" id="origin"></p></div>
+  <div class="badge">Offline report · capture complete</div>
+</header>
+<div class="filters" aria-label="Timeline filters">
+  <label>Robot MAC<select id="mac"><option value="">All MACs</option></select></label>
+  <label>Route form<select id="form"><option value="">MAC-only + MAC/IP</option><option value="mac">MAC-only</option><option value="ip">MAC/IP</option></select></label>
+  <label>Capture point<select id="point"><option value="">All capture points</option></select></label>
+  <label>Leaf–spine link<select id="link"><option value="">All physical links</option></select></label>
+  <label>Direction<select id="direction"><option value="">Both directions</option><option value="leaf_to_spine">Leaf → spine</option><option value="spine_to_leaf">Spine → leaf</option><option value="unknown">Unknown</option></select></label>
+  <label>Route distinguisher<select id="rd"><option value="">All RDs</option></select></label>
+  <label>Count<select id="unit"><option value="nlri">Type-2 NLRIs</option><option value="message">BGP UPDATE messages</option></select></label>
+  <label>From (seconds)<input id="from" type="number" step="any" value="0"></label>
+  <label>To (seconds)<input id="to" type="number" step="any"></label>
+  <button id="reset" type="button">Reset filters</button>
+  <button id="mobility" type="button" hidden>Mobility window</button>
+</div>
+<div class="tools">
+  <span class="legend"><i class="swatch"></i>Advertisements</span><span class="legend"><i class="swatch wd"></i>Withdrawals</span>
+  <span class="legend" style="color:#e9a0ff">× Captured gateway ARP at new leaf</span>
+  <span class="muted" id="unit-note">Cumulative Type-2 NLRI transmissions · all observed copies</span>
+  <span class="spacer"></span><button id="export" type="button">Download filtered CSV</button>
+</div>
+<p id="filter-error" class="error" role="alert" hidden></p>
+<div class="panels" id="panels"></div>
+<div id="hover" class="hover" role="status">Hover over a graph to inspect a recorded event time. Select a table row for full route details.</div>
+<h2>Type-2 NLRI counts by physical link and direction</h2>
+<p class="muted">One capture endpoint per link. Counts follow the filters; quiet captured links remain visible.</p>
+<div class="table-wrap"><table><thead><tr><th>Link</th><th>Leaf → spine ads</th><th>Leaf → spine withdrawals</th><th>Spine → leaf ads</th><th>Spine → leaf withdrawals</th></tr></thead><tbody id="link-counts"></tbody></table></div>
+<h2 style="margin-top:20px">Captured gateway ARP arrivals</h2>
+<p class="muted">× marks when a gateway ARP request reached the new leaf's host port. Close marks can overlap.</p>
+<div class="table-wrap"><table><thead><tr><th>Elapsed (s)</th><th>Capture time UTC</th><th>Robot IP / MAC</th><th>New leaf</th><th>Packet</th><th>PCAP point / frame</th></tr></thead><tbody id="host-arrivals"></tbody></table></div>
+<div class="table-head"><div><h2>Route event records</h2><p class="muted" id="table-summary"></p></div><div class="pager"><button id="previous" type="button">Previous</button><span id="page"></span><button id="next" type="button">Next</button><button id="order" type="button">Oldest first ↓</button></div></div>
+<div class="table-wrap"><table><thead><tr><th>Capture time (UTC)</th><th>Elapsed (s)</th><th>Point / interface</th><th>Direction</th><th>Event</th><th>Robot MAC</th><th>Robot IP / form</th><th>RD</th><th>Frame / BGP message</th><th>Mobility seq.</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div id="detail" class="detail" hidden><h2>Selected route record</h2><div id="detail-grid" class="detail-grid"></div></div>
+<details><summary>How to interpret the timestamps and counts</summary>
+  <p>The horizontal axis uses capture-file timestamps. Zero is session capture start when a manifest is available, otherwise the first decoded event. Step lines change only at recorded times; pixel positions are approximate. The table preserves full timestamp digits exported by TShark. Purple × marks are captured gateway ARP arrivals.</p>
+  <p>A message spanning TCP segments is assigned the capture time of the frame where TShark displays its completed reassembly. Multiple BGP messages in one frame, and multiple NLRIs in one message, can share a timestamp. Equal timestamps do not establish an order across different BGP sessions or capture points.</p>
+  <p>NLRI mode counts MAC-only and MAC/IP separately, including propagation and re-advertisements. Message mode counts distinct capture-point/frame/message identifiers that contain matching Type-2 records. An UPDATE containing both advertisements and withdrawals contributes once to each series; the series must not be added to obtain a unique-message total.</p>
+  <p>Filters and the time window apply before counting. Counts start at zero for the selected window. Experiment markers use the manifest's host-clock times. Packet observation time does not establish forwarding-table installation time, per-robot outage, or internal router processing time. Clock accuracy, capture loss, and TCP reassembly affect interpretation; digit precision is not an accuracy guarantee.</p>
+</details>
+<footer id="footer"></footer>
+</main>
+<script id="type2-report-data" type="application/json">__TYPE2_REPORT_DATA__</script>
+<script>
+"use strict";
+const report = JSON.parse(document.getElementById("type2-report-data").textContent);
+const events = report.events;
+function isHostArrival(marker) { return marker.kind === "arp_arrival"; }
+const names = Object.keys(report.by_capture_point).sort();
+const filterIds = ["mac", "form", "point", "link", "direction", "rd", "unit", "from", "to"];
+let filtered = [];
+let page = 0;
+let descending = false;
+const pageSize = 50;
+let bounds = {start:0, end:Math.max(Number(report.duration_seconds), 0.001)};
+
+// Populate a filter from unique decoded field values, using text rather than HTML.
+function fillOptions(id, field) {
+    const values = new Set();
+    for (const row of events) { if (row[field]) { values.add(row[field]); } }
+    for (const value of Array.from(values).sort()) {
+        const option = document.createElement("option"); option.value = value; option.textContent = value;
+        document.getElementById(id).appendChild(option);
+    }
+}
+
+// Create an SVG element with safe attributes and optional plain text.
+function svgElement(tag, attributes, text) {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (const name of Object.keys(attributes)) { node.setAttribute(name, attributes[name]); }
+    if (text !== undefined) { node.textContent = text; }
+    return node;
+}
+
+// Select records by host identity, route form, observed link, and capture time.
+function matches(row) {
+    const value = Number(row.relative_seconds);
+    if (value < bounds.start || value > bounds.end) { return false; }
+    for (const id of ["mac", "point", "rd", "direction"]) {
+        const field = id === "point" ? "capture_point" : id;
+        const choice = document.getElementById(id).value;
+        if (choice && row[field] !== choice) { return false; }
+    }
+    const link = document.getElementById("link").value;
+    if (link && row.link !== link) { return false; }
+    const form = document.getElementById("form").value;
+    return !((form === "mac" && row.ip) || (form === "ip" && !row.ip));
+}
+
+// Group simultaneous records into atomic steps; optionally count UPDATEs once.
+function makeSteps(rows) {
+    const times = new Map();
+    const seen = {advertisement:new Set(), withdrawal:new Set()};
+    const messageMode = document.getElementById("unit").value === "message";
+    let uniqueMessages = new Set();
+    for (const row of rows) {
+        const key = row.capture_point + "/" + row.frame_number + "/" + row.bgp_message_index;
+        uniqueMessages.add(key);
+        if (messageMode && seen[row.event].has(key)) { continue; }
+        seen[row.event].add(key);
+        let step = times.get(row.timestamp_epoch);
+        if (!step) {
+            step = {time:Number(row.relative_seconds), epoch:row.timestamp_epoch, utc:row.capture_time_utc, advertisement:0, withdrawal:0};
+            times.set(row.timestamp_epoch, step);
+        }
+        step[row.event] += 1;
+    }
+    const steps = Array.from(times.values());
+    let advertisement = 0; let withdrawal = 0;
+    for (const step of steps) {
+        advertisement += step.advertisement; withdrawal += step.withdrawal;
+        step.advertisement = advertisement; step.withdrawal = withdrawal;
+    }
+    return {steps, advertisement, withdrawal, uniqueMessages:uniqueMessages.size};
+}
+
+// Build a true step path: horizontal between captured timestamps, then vertical.
+function stepPath(steps, kind, start, end, maxCount) {
+    const x = time => 45 + 425 * (time - start) / (end - start);
+    const y = count => 208 - 165 * count / maxCount;
+    let path = "M " + x(start) + " " + y(0);
+    for (const step of steps) { path += " H " + x(step.time) + " V " + y(step[kind]); }
+    return path + " H " + x(end);
+}
+
+// Show the nearest plotted capture time; table rows retain its full precision.
+function inspectGraph(event) {
+    const chart = event.currentTarget;
+    const context = chart.timelineContext;
+    if (!context || context.steps.length === 0) { return; }
+    const rectangle = chart.getBoundingClientRect();
+    const position = (event.clientX - rectangle.left) / rectangle.width * 500;
+    const time = bounds.start + Math.max(0, Math.min(1, (position - 45) / 425)) * (bounds.end - bounds.start);
+    let selected = context.steps[0];
+    for (const step of context.steps) { if (Math.abs(step.time - time) < Math.abs(selected.time - time)) { selected = step; } }
+    document.getElementById("hover").textContent = context.title + " · " + selected.utc + " · epoch " + selected.epoch +
+        " · cumulative advertisements " + selected.advertisement + ", withdrawals " + selected.withdrawal +
+        " · equal timestamps may contain several route records";
+}
+
+// Draw combined/per-spine totals from this filter's packet-timestamp events.
+function drawPanel(title, pointName) {
+    const rows = [];
+    for (const row of filtered) { if (!pointName || row.capture_point === pointName) { rows.push(row); } }
+    const series = makeSteps(rows);
+    const panel = document.createElement("section"); panel.className = "panel";
+    const heading = document.createElement("h2"); heading.textContent = title; panel.appendChild(heading);
+    const scope = document.createElement("p"); scope.className = "muted";
+    scope.textContent = pointName ? "Captured leaf links · selected filters" : "All selected capture points"; panel.appendChild(scope);
+    const counts = document.createElement("div"); counts.className = "counts";
+    for (const kind of ["advertisement", "withdrawal"]) {
+        const cell = document.createElement("div"); const label = document.createElement("span");
+        label.textContent = kind === "advertisement" ? "Advertisements" : "Withdrawals";
+        const number = document.createElement("strong"); number.textContent = series[kind].toLocaleString();
+        cell.append(label, number); counts.appendChild(cell);
+    }
+    panel.appendChild(counts);
+    const records = document.createElement("p"); records.className = "muted";
+    records.textContent = rows.length.toLocaleString() + " NLRI records · " + series.uniqueMessages.toLocaleString() + " distinct BGP UPDATE messages";
+    panel.appendChild(records);
+    const chart = svgElement("svg", {viewBox:"0 0 500 255", role:"img", "aria-label":title + " cumulative advertisements and withdrawals at packet capture times"});
+    const maximum = Math.max(series.advertisement, series.withdrawal, 1);
+    const ceiling = Math.max(4, Math.ceil(maximum / 4) * 4);
+    for (let tick = 0; tick <= 4; tick += 1) {
+        const y = 208 - tick * 165 / 4;
+        chart.appendChild(svgElement("line", {x1:45, y1:y, x2:470, y2:y, class:"grid"}));
+        chart.appendChild(svgElement("text", {x:36, y:y + 4, "text-anchor":"end"}, String(ceiling * tick / 4)));
+        const time = bounds.start + (bounds.end - bounds.start) * tick / 4;
+        chart.appendChild(svgElement("text", {x:45 + tick * 425 / 4, y:228, "text-anchor":"middle"}, time.toFixed(bounds.end - bounds.start < 0.01 ? 6 : 3)));
+    }
+    for (const marker of report.markers) {
+        const time = Number(marker.relative_seconds);
+        if (time < bounds.start || time > bounds.end) { continue; }
+        const x = 45 + 425 * (time - bounds.start) / (bounds.end - bounds.start);
+        if (isHostArrival(marker) && document.getElementById("mac").value && marker.mac !== document.getElementById("mac").value) { continue; }
+        const hostPacket = isHostArrival(marker);
+        const line = svgElement("line", {x1:x, x2:x, y1:35, y2:208, class:hostPacket ? "host-marker" : "marker"});
+        line.appendChild(svgElement("title", {}, marker.label + " · " + marker.capture_time_utc)); chart.appendChild(line);
+        if (hostPacket) {
+            const cross = svgElement("text", {x, y:220, "text-anchor":"middle", style:"fill:#e9a0ff;font-size:18px"}, "×");
+            cross.appendChild(svgElement("title", {}, marker.label + " · " + marker.relative_seconds + " s · " + marker.capture_time_utc));
+            chart.appendChild(cross);
+        }
+    }
+    chart.appendChild(svgElement("path", {d:stepPath(series.steps, "advertisement", bounds.start, bounds.end, ceiling), class:"series", stroke:"#39d0ff"}));
+    chart.appendChild(svgElement("path", {d:stepPath(series.steps, "withdrawal", bounds.start, bounds.end, ceiling), class:"series", stroke:"#ffb36b", "stroke-dasharray":"6 4"}));
+    chart.appendChild(svgElement("text", {x:255, y:249, "text-anchor":"middle"}, "Seconds since capture time origin · × host packet"));
+    if (rows.length === 0) { chart.appendChild(svgElement("text", {x:255, y:110, "text-anchor":"middle"}, "No matching records")); }
+    chart.timelineContext = {title, steps:series.steps}; chart.addEventListener("pointermove", inspectGraph);
+    panel.appendChild(chart); document.getElementById("panels").appendChild(panel);
+}
+
+// Show exact identifiers so this event can be located in its original PCAPNG.
+function showRecord(event) {
+    const row = event.currentTarget.routeRecord;
+    for (const element of document.querySelectorAll("tbody tr")) { element.setAttribute("aria-selected", "false"); }
+    event.currentTarget.setAttribute("aria-selected", "true");
+    const grid = document.getElementById("detail-grid"); grid.replaceChildren();
+    const fields = [
+        ["Capture time UTC", row.capture_time_utc], ["Raw epoch (recorded precision)", row.timestamp_epoch],
+        ["Elapsed seconds", row.relative_seconds], ["Capture point / interface", row.capture_point + " / " + (row.interface || "unknown")],
+        ["Event / route form", row.event + " / " + (row.ip ? "MAC/IP" : "MAC-only")], ["Robot MAC / IP", row.mac + " / " + (row.ip || "no IP")],
+        ["RD / Ethernet tag", row.rd + " / " + row.ethernet_tag], ["VNI / second VNI", row.vni + " / " + (row.vni2 || "—")],
+        ["BGP next hop / mobility sequence", (row.next_hop || "not carried") + " / " + (row.mobility_sequence || "not carried")],
+        ["BGP source", row.source_ip + ":" + row.source_port], ["BGP destination", row.destination_ip + ":" + row.destination_port],
+        ["Link / sender → receiver", row.link + " / " + row.sender + " → " + row.receiver],
+        ["Origin leaf / observed transmission", (row.origin_leaf || "unknown") + " / " + (row.transmission || "unknown")],
+        ["Wireshark display filter", "frame.number == " + row.frame_number + " · BGP message " + row.bgp_message_index + " · TCP stream " + row.tcp_stream]
+    ];
+    for (const item of fields) { const cell = document.createElement("div"); const label = document.createElement("strong"); label.textContent = item[0]; const value = document.createElement("span"); value.className = "mono"; value.textContent = item[1]; cell.append(label, value); grid.appendChild(cell); }
+    document.getElementById("detail").hidden = false;
+}
+
+// Paginate route records; ordering uses the decoder's precise Python sort.
+function drawTable() {
+    const body = document.getElementById("rows"); body.replaceChildren();
+    const ordered = filtered.slice(); if (descending) { ordered.reverse(); }
+    const pages = Math.max(1, Math.ceil(ordered.length / pageSize)); page = Math.min(page, pages - 1);
+    for (const row of ordered.slice(page * pageSize, (page + 1) * pageSize)) {
+        const element = document.createElement("tr"); element.routeRecord = row; element.tabIndex = 0;
+        element.setAttribute("aria-selected", "false"); element.addEventListener("click", showRecord);
+        element.addEventListener("keydown", selectWithKeyboard);
+        const values = [row.capture_time_utc, row.relative_seconds, row.capture_point + " / " + (row.interface || "unknown"),
+            row.direction || "unknown", row.event, row.mac, row.ip || "MAC-only", row.rd, row.frame_number + " / " + row.bgp_message_index, row.mobility_sequence || "—"];
+        for (let index = 0; index < values.length; index += 1) { const cell = document.createElement("td"); cell.textContent = values[index]; if ([0,1,5,6,7,8].includes(index)) { cell.className = "mono"; } if (index === 4) { cell.className = "event-" + row.event; } element.appendChild(cell); }
+        body.appendChild(element);
+    }
+    document.getElementById("page").textContent = (page + 1) + " / " + pages;
+    document.getElementById("previous").disabled = page === 0; document.getElementById("next").disabled = page + 1 === pages;
+    document.getElementById("table-summary").textContent = filtered.length.toLocaleString() + " matching records of " + events.length.toLocaleString() + " · full recorded timestamp digits · click a row for details";
+}
+
+function selectWithKeyboard(event) {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showRecord(event); }
+}
+
+// Apply filters to records before constructing event-time steps or message counts.
+function render() {
+    const start = Number(document.getElementById("from").value);
+    const end = Number(document.getElementById("to").value);
+    const error = document.getElementById("filter-error");
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) { error.textContent = "Enter a valid time window with To greater than From."; error.hidden = false; return; }
+    error.hidden = true; bounds = {start, end}; filtered = events.filter(matches); page = 0;
+    document.getElementById("panels").replaceChildren(); drawPanel("Combined total", "");
+    for (const name of names) { drawPanel(name, name); }
+    document.getElementById("unit-note").textContent = document.getElementById("unit").value === "message" ?
+        "Cumulative matching UPDATE messages · a mixed message can count in both series" : "Cumulative Type-2 NLRI transmissions · all observed copies";
+    document.getElementById("detail").hidden = true;
+    document.getElementById("hover").textContent = "Hover over a graph to inspect a recorded event time. Select a table row for full route details.";
+    drawTable();
+    drawLinkCounts(); drawHostArrivals();
+}
+
+// Count each physical link once, partitioned by its observed BGP direction.
+function drawLinkCounts() {
+    const body = document.getElementById("link-counts"); body.replaceChildren();
+    for (const name of Object.keys(report.by_link || {}).sort()) {
+        const choice = document.getElementById("link").value;
+        if (choice && choice !== name) { continue; }
+        const counts = {leaf_to_spine:{advertisement:0,withdrawal:0},spine_to_leaf:{advertisement:0,withdrawal:0}};
+        for (const row of filtered) { if (row.link === name && counts[row.direction]) { counts[row.direction][row.event] += 1; } }
+        const tr = document.createElement("tr");
+        for (const value of [name,counts.leaf_to_spine.advertisement,counts.leaf_to_spine.withdrawal,counts.spine_to_leaf.advertisement,counts.spine_to_leaf.withdrawal]) {
+            const td = document.createElement("td"); td.textContent = value; tr.appendChild(td);
+        }
+        body.appendChild(tr);
+    }
+}
+
+// List packet-derived move markers separately from command-time annotations.
+function drawHostArrivals() {
+    const body = document.getElementById("host-arrivals"); body.replaceChildren();
+    for (const marker of report.markers) {
+        if (!isHostArrival(marker)) { continue; }
+        const time = Number(marker.relative_seconds);
+        const mac = document.getElementById("mac").value;
+        if (time < bounds.start || time > bounds.end || (mac && marker.mac !== mac)) { continue; }
+        const tr = document.createElement("tr");
+        for (const value of [marker.relative_seconds,marker.capture_time_utc,marker.ip + " / " + marker.mac,marker.leaf,marker.arp_kind,marker.capture_point + " / " + marker.frame_number]) {
+            const td = document.createElement("td"); td.textContent = value; tr.appendChild(td);
+        }
+        body.appendChild(tr);
+    }
+}
+
+function resetFilters() {
+    for (const id of ["mac", "form", "point", "link", "direction", "rd"]) { document.getElementById(id).value = ""; }
+    document.getElementById("unit").value = "nlri"; document.getElementById("from").value = "0";
+    document.getElementById("to").value = String(Math.max(Number(report.duration_seconds), 0.001)); render();
+}
+
+function mobilityWindow() {
+    const start = report.markers.find(marker => marker.label === "mobility_start");
+    const end = report.markers.find(marker => marker.label === "mobility_end");
+    if (!start || !end) { return; }
+    document.getElementById("from").value = start.relative_seconds; document.getElementById("to").value = end.relative_seconds; render();
+}
+
+// Export the selected NLRIs, retaining raw timestamps and original route fields.
+function exportRows() {
+    const columns = ["capture_time_utc", "timestamp_epoch", "relative_seconds", "capture_point", "interface", "link", "sender", "receiver", "origin_leaf", "transmission", "direction", "event", "mac", "ip", "rd", "frame_number", "bgp_message_index", "tcp_stream", "next_hop", "vni", "vni2", "mobility_sequence", "source_ip", "source_port", "destination_ip", "destination_port"];
+    const lines = [columns.join(",")];
+    for (const row of filtered) { const cells = []; for (const field of columns) { cells.push('"' + String(row[field] || "").replaceAll('"', '""') + '"'); } lines.push(cells.join(",")); }
+    const url = URL.createObjectURL(new Blob([lines.join("\r\n")], {type:"text/csv;charset=utf-8"}));
+    const link = document.createElement("a"); link.href = url; link.download = "type2_events_filtered.csv"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+fillOptions("mac", "mac"); fillOptions("point", "capture_point"); fillOptions("rd", "rd");
+for (const name of Object.keys(report.by_link || {}).sort()) { const option = document.createElement("option"); option.value = name; option.textContent = name; document.getElementById("link").appendChild(option); }
+for (const id of filterIds) { document.getElementById(id).addEventListener("change", render); }
+document.getElementById("reset").addEventListener("click", resetFilters);
+document.getElementById("mobility").addEventListener("click", mobilityWindow);
+document.getElementById("mobility").hidden = !report.markers.some(marker => marker.label === "mobility_start") || !report.markers.some(marker => marker.label === "mobility_end");
+document.getElementById("previous").addEventListener("click", () => { page -= 1; drawTable(); });
+document.getElementById("next").addEventListener("click", () => { page += 1; drawTable(); });
+document.getElementById("order").addEventListener("click", () => { descending = !descending; page = 0; document.getElementById("order").textContent = descending ? "Newest first ↑" : "Oldest first ↓"; drawTable(); });
+document.getElementById("export").addEventListener("click", exportRows);
+document.getElementById("origin").textContent = report.origin_utc ? "Time origin: " + report.origin_utc : "No Type-2 records were decoded";
+document.getElementById("method").textContent = (report.experiment || {}).method || "";
+document.getElementById("footer").textContent = "Source: " + report.events_csv + " · " + events.length.toLocaleString() + " decoded NLRI records · standalone report; no live server or external assets required";
+resetFilters();
+</script>
+</body>
+</html>

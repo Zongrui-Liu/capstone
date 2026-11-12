@@ -121,3 +121,6 @@ refix
 pceplib/test/*.log
 pceplib/test/*.trs
 /tests/topotests/lib/mgmt_pb2.py
+
+# Local EVPN captures and generated reports
+/capstone_results/

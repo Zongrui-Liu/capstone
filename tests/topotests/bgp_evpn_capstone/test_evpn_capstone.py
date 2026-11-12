@@ -1386,15 +1386,20 @@ def test_evpn_multiple_host_pairs_mobility():
 
 
 def test_evpn_type2_mobility_capture():
-    """Capture Type-2 advertisements and withdrawals in the existing fabric."""
+    """Capture only after the main tests and an explicit stable readiness check.
 
-    # Import here because test_evpn_capture already imports this module.
-    # This avoids a circular import during module initialization.
-    from bgp_evpn_capstone import test_evpn_capture as test_capture
+    Records all leaf/spine links and both moved-host gateway ARP rounds;
+    builds analysis/type2_timeline.html AFTER captures stop. See
+    EVPN_PACKET_CAPTURE.md for parameters, packet counts and run instructions.
+    """
+    from bgp_evpn_capstone import evpn_capture_mobility as capture_mobility
 
-    # Run the capture procedure using the topology created by our setup_module.
-    # It moves host11/21 and host12/22 and analyzes the captured traffic.
-    test_capture.test_evpn_type2_mobility_capture()
+    # Existing Topogen instance belongs to this module's setup_module.
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+    # The helper uses existing topology readers, without building another fabric.
+    capture_mobility.run_capture_mobility(tgen, sys.modules[__name__])
 
 
 if __name__ == "__main__":

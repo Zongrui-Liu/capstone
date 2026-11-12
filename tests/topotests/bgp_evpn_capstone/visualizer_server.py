@@ -12,12 +12,6 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import logging
 
-# Add the independent packet-derived Type-2 page and its counter endpoints.
-if __package__:
-    from .type2_live_server import register_type2_chart
-else:
-    from type2_live_server import register_type2_chart
-
 # suppress standard Werkzeug request logs to focus on mobility/debug messages
 log = logging.getLogger('werkzeug')
 
@@ -31,9 +25,6 @@ app = Flask(__name__)
 # `cors_allowed_origins="*"` allows browser clients from any origin to connect
 # this is convenient during local development and containerized test runs
 socketio = SocketIO(app, cors_allowed_origins="*")
-
-# Keep Type-2 packet counts separate from the existing route-table chart.
-register_type2_chart(app)
 
 # Topology events kept so browsers that connect late (or refresh) see the graph.
 event_history = []

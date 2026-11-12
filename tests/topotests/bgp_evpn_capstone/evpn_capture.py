@@ -13,7 +13,6 @@ import datetime
 import ipaddress
 import json
 import os
-import pwd
 import shutil
 import signal
 import subprocess
@@ -22,9 +21,20 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+if os.name == "posix":
+    import pwd
+
+if __package__:
+    from .evpn_result_storage import create_capture_directory, share_result_permissions
+    from .evpn_type2_report import _timestamp_utc
+else:
+    from evpn_result_storage import create_capture_directory, share_result_permissions
+    from evpn_type2_report import _timestamp_utc
+
 
 CSV_FIELDS = [
     "timestamp_epoch", "timestamp_utc", "capture_point", "interface", "leaf",
+    "link", "sender", "receiver", "origin_leaf", "transmission",
     "direction", "frame_number", "tcp_stream", "source_ip", "source_port",
     "destination_ip", "destination_port", "bgp_message_index", "event",
     "route_type", "rd", "ethernet_tag", "mac", "ip", "next_hop", "vni",
@@ -53,8 +63,12 @@ def _save_manifest(session):
         "stopped_epoch": session.get("stopped_epoch"),
         "markers": session["markers"],
         "captures": [],
-        "live_counts_path": session.get("live_counts_path"),
     }
+    # Experiment metadata records current identities, origin VTEPs and move
+    # windows for packet-derived offline analysis.
+    for name in ("capture_kind", "capture_filter", "experiment"):
+        if name in session:
+            data[name] = session[name]
     for capture in session["captures"]:
         entry = dict(capture)
         entry.pop("_process", None)
@@ -79,24 +93,57 @@ def _wait_for_capture(capture, timeout):
     raise RuntimeError("Capture did not become ready; inspect " + capture["log_path"])
 
 
-def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None,
-                  live_chart=True, visualizer_url=None):
+def _start_capture_process(router, capture, capture_filter):
+    """Launch one dumpcap inside router and attach its process to capture.
+
+    Args:
+        router: Running Topogen router, such as tgen.gears['leaf1'].
+        capture (dict): pcap_path, log_path, and interfaces (each has a name).
+        capture_filter (str): libpcap filter applied to every selected interface.
+    Returns:
+        None. Adds _process and _log_stream to capture for capture_stop.
+    Side effects:
+        Opens output/log files and starts a background process. The caller must
+        add capture to its session, wait for readiness, and stop it in finally.
+    """
+    command = ["dumpcap", "-q", "-f", capture_filter, "-s", "0"]
+    for interface in capture["interfaces"]:
+        command.extend(["-i", interface["name"]])
+    # Open relative to the shared run folder after entering the router: Munet
+    # resets cwd, and dumpcap drops privileges before opening its output file.
+    path = Path(capture["pcap_path"])
+    command.extend(["-w", path.name])
+    capture_command = [
+        "/bin/sh", "-c", 'cd "$1" && shift && exec "$@"',
+        "evpn-dumpcap", str(path.parent),
+    ]
+    capture_command.extend(command)
+    log_stream = open(capture["log_path"], "w", encoding="utf-8")
+    try:
+        process = router.popen(
+            capture_command, stdout=subprocess.DEVNULL, stderr=log_stream,
+        )
+    except BaseException:
+        log_stream.close()
+        raise
+    capture["_process"] = process
+    capture["_log_stream"] = log_stream
+
+
+def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None):
     """Start background BGP capture on every selected spine-to-leaf link.
 
     Args:
         tgen: The RUNNING Topogen object returned by fabric.get_topogen().
             tgen.gears contains router objects; this is not a hostname string.
         output_dir (str or Path or None): A NEW directory for this run. Default:
-            tgen.logdir/evpn_capture_<UTC timestamp>. Existing directories are
-            rejected so previous packet captures cannot be overwritten.
+            <FRR checkout>/capstone_results/evpn_capture_<UTC timestamp>, using
+            the existing repository mount. The results root is created if
+            missing. CAPSTONE_RESULTS_DIR can override it with a prepared root.
+            Existing run directories are rejected to prevent overwriting them.
         spine_names (list[str] or None): Capture routers, default spine1/spine2.
         leaf_names (list[str] or None): Connected leaves, default leaf1..leaf5.
             Each selected spine must have interfaces named eth-<leaf name>.
-        live_chart (bool): True starts streaming Type-2 decoding for the live
-            /type2-chart page. False records raw traffic for offline analysis
-            only, avoiding the extra live TShark CPU workload.
-        visualizer_url (str or None): Visualizer base URL, e.g.
-            "http://127.0.0.1:5000". Defaults to VISUALIZER_URL or that URL.
 
     Returns:
         dict: A live session containing directory, captures, and markers. Keep
@@ -106,8 +153,8 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None,
     Side effects:
         Starts one dumpcap process per spine, captures BOTH directions of TCP
         port 179 (IPv4 and IPv6), and writes PCAPNG/log/manifest files. Does not
-        move hosts or change router configuration. By default it also starts
-        live TShark decoding for /type2-chart. Stop in a finally block.
+        move hosts or change router configuration. Decoding starts only after
+        capture_stop has flushed all files. Stop in a finally block.
         Raises RuntimeError if capture fails; partially started processes stop.
 
     Example:
@@ -124,11 +171,8 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None,
         leaf_names = ["leaf1", "leaf2", "leaf3", "leaf4", "leaf5"]
     if not spine_names or not leaf_names:
         raise ValueError("Select at least one spine and one leaf")
-    if output_dir is None:
-        stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
-        output_dir = Path(tgen.logdir) / ("evpn_capture_" + stamp)
-    directory = Path(output_dir).resolve()
-    directory.mkdir(parents=True, exist_ok=False)
+    # Create the run inside the existing VM-backed repository mount.
+    directory = create_capture_directory(output_dir)
     session = {
         "directory": str(directory), "captures": [], "markers": [],
         "started_epoch": time.time(),
@@ -142,8 +186,6 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None,
                 "log_path": str(directory / (spine_name + "_dumpcap.log")),
                 "interfaces": [],
             }
-            # Put -f BEFORE all -i options so the filter applies to every link.
-            command = ["dumpcap", "-q", "-f", "tcp port 179", "-s", "0"]
             for leaf_name in leaf_names:
                 interface = "eth-" + leaf_name
                 # Read the spine's interface MAC to identify packet direction.
@@ -152,33 +194,16 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None,
                 ).strip().lower()
                 capture["interfaces"].append({
                     "name": interface, "leaf": leaf_name, "spine_mac": mac,
+                    "spine": spine_name, "link": leaf_name + "--" + spine_name,
                 })
-                command.extend(["-i", interface])
-            command.extend(["-w", capture["pcap_path"]])
-            log_stream = open(capture["log_path"], "w", encoding="utf-8")
-            try:
-                # popen launches inside this router's namespaces and returns
-                # immediately, leaving Python free to run mobility commands.
-                process = router.popen(command, stdout=subprocess.DEVNULL, stderr=log_stream)
-            except BaseException:
-                log_stream.close()
-                raise
-            capture["_process"] = process
-            capture["_log_stream"] = log_stream
+            # Reuse the launcher that also handles the ARP access captures.
+            _start_capture_process(router, capture, "tcp port 179")
             session["captures"].append(capture)
             # Confirm capture readiness instead of assuming a fixed sleep works.
             _wait_for_capture(capture, timeout=10)
         capture_mark(session, "capture_ready")
-        if live_chart:
-            # Reuse the structured offline parser to count each captured NLRI
-            # during mobility, rather than sampling route-table sizes.
-            if __package__:
-                from .evpn_type2_live import Type2LiveMonitor
-            else:
-                from evpn_type2_live import Type2LiveMonitor
-            monitor = Type2LiveMonitor(session, _pdml_type2_rows, visualizer_url)
-            session["_live_monitor"] = monitor
-            monitor.start()
+        # dumpcap creates restrictive files; grant access within the public share.
+        share_result_permissions(directory)
         return session
     except BaseException:
         capture_stop(session)
@@ -240,11 +265,9 @@ def capture_stop(session):
         capture["clean_shutdown"] = clean and process.returncode == 0
     if "stopped_epoch" not in session:
         session["stopped_epoch"] = time.time()
-    # Drain the growing-file decoders only after dumpcap has flushed all bytes.
-    monitor = session.get("_live_monitor")
-    if monitor is not None:
-        session["live_counts_path"] = monitor.stop()
     _save_manifest(session)
+    # Apply shared modes after all capture writers have closed.
+    share_result_permissions(session["directory"])
     return str(Path(session["directory"]) / "capture_manifest.json")
 
 
@@ -321,21 +344,39 @@ def _packet_context(packet, capture_info):
     if selected is None and interface_id and int(interface_id) < len(interfaces):
         selected = interfaces[int(interface_id)]
         interface = selected["name"]
+    if selected is None and len(interfaces) == 1:
+        selected = interfaces[0]
+        interface = selected["name"]
     direction = "unknown"
     leaf = ""
+    link_name = ""
+    sender = ""
+    receiver = ""
     if selected is not None:
         leaf = selected["leaf"]
         source_mac = _show(packet, "eth.src").lower()
         destination_mac = _show(packet, "eth.dst").lower()
-        if source_mac == selected["spine_mac"]:
+        if capture_info.get("point_role") == "leaf" and selected.get("role") == "uplink":
+            if source_mac == selected["local_mac"]:
+                direction = "leaf_to_spine"
+            elif destination_mac == selected["local_mac"]:
+                direction = "spine_to_leaf"
+        elif source_mac == selected.get("spine_mac", ""):
             direction = "spine_to_leaf"
-        elif destination_mac == selected["spine_mac"]:
+        elif destination_mac == selected.get("spine_mac", ""):
             direction = "leaf_to_spine"
+        spine = selected.get("spine", capture_info["capture_point"])
+        link_name = selected.get("link", leaf + "--" + spine)
+        if direction == "leaf_to_spine":
+            sender, receiver = leaf, spine
+        elif direction == "spine_to_leaf":
+            sender, receiver = spine, leaf
     epoch = _show(packet, "frame.time_epoch")
     return {
-        "timestamp_epoch": epoch, "timestamp_utc": _utc(epoch),
+        "timestamp_epoch": epoch, "timestamp_utc": _timestamp_utc(epoch),
         "capture_point": capture_info["capture_point"],
         "interface": interface, "leaf": leaf, "direction": direction,
+        "link": link_name, "sender": sender, "receiver": receiver,
         "frame_number": _show(packet, "frame.number"),
         "tcp_stream": _show(packet, "tcp.stream"),
         "source_ip": _show(packet, "ip.src") or _show(packet, "ipv6.src"),
@@ -401,6 +442,17 @@ def _packet_type2_rows(packet, capture_info):
                     row["mobility_sequence"] = sequence
                 if not row["mac"]:
                     raise ValueError("Type-2 route has no decoded MAC; inspect PDML")
+                # RD identifies the originating leaf; link direction alone does
+                # not prove a leaf generated the route (it may propagate one).
+                origin_vtep = row["rd"].rsplit(":", 1)[0]
+                row["origin_leaf"] = capture_info.get("vtep_leaves", {}).get(origin_vtep, "")
+                row["transmission"] = "unknown"
+                if row["direction"] == "spine_to_leaf":
+                    row["transmission"] = "spine_forwarded"
+                elif row["direction"] == "leaf_to_spine" and row["origin_leaf"]:
+                    row["transmission"] = "leaf_propagated"
+                    if row["origin_leaf"] == row["leaf"]:
+                        row["transmission"] = "leaf_originated"
                 yield row
 
 
@@ -427,7 +479,7 @@ def _run_tshark(command, pcap_path, output, errors):
     (or nobody) and a private temporary copy, preserving raw capture ownership
     and permissions. The parent opens output/log files before dropping UID.
     """
-    if os.geteuid() != 0:
+    if os.name != "posix" or os.geteuid() != 0:
         return subprocess.run(command, stdout=output, stderr=errors, check=False)
     try:
         account = pwd.getpwnam("frr")
@@ -462,7 +514,8 @@ def decode_captures(pcap_paths, output_dir, manifest_path=None):
             Optional for ordinary captures; without it, direction is unknown.
     Returns:
         dict: advertisement/withdrawal counts, by_capture_point, by_mac,
-            events_csv, and summary_path. Also saves type2_summary.json.
+            events_csv, summary_path, and timeline_html. Also saves
+            type2_summary.json and a standalone packet-timestamp HTML timeline.
     Side effects:
         Runs TShark OFFLINE with TCP/BGP reassembly. Writes one CSV row per
         Type-2 NLRI transmission, not one row per TCP packet or BGP UPDATE.
@@ -485,7 +538,7 @@ def decode_captures(pcap_paths, output_dir, manifest_path=None):
         "markers": manifest.get("markers", []),
         "events_csv": str(directory / "type2_events.csv"),
         "summary_path": str(directory / "type2_summary.json"),
-        "counting_note": "Per-NLRI session transmissions; includes both spines and fanout. Not robot moves.",
+        "counting_note": "Per-NLRI transmissions on captured links; includes propagated copies. Not robot moves.",
         "retransmission_policy": "Exclude frames marked as retransmissions by TShark TCP analysis.",
     }
     with open(summary["events_csv"], "w", newline="", encoding="utf-8") as csv_stream:
@@ -498,7 +551,8 @@ def decode_captures(pcap_paths, output_dir, manifest_path=None):
             info = {"capture_point": path.stem, "interfaces": []}
             for capture in manifest["captures"]:
                 if Path(capture["pcap_path"]).name == path.name:
-                    info = capture
+                    info = dict(capture)
+                    info["vtep_leaves"] = manifest.get("experiment", {}).get("vtep_leaves", {})
             summary["pcap_files"].append(str(path))
             pdml_path = directory / ("decoded_{}.pdml".format(index))
             error_path = directory / ("tshark_{}.log".format(index))
@@ -525,7 +579,19 @@ def decode_captures(pcap_paths, output_dir, manifest_path=None):
                 mac_counts = summary["by_mac"].setdefault(
                     row["mac"], {"advertisement": 0, "withdrawal": 0})
                 _increment(mac_counts, row["event"])
+    # Build the offline timeline from recorded packet times, not live sample times.
+    if __package__:
+        from .evpn_type2_report import write_type2_report, write_link_summary
+    else:
+        from evpn_type2_report import write_type2_report, write_link_summary
+    summary["timeline_html"] = write_type2_report(
+        summary["events_csv"], directory / "type2_timeline.html", manifest_path
+    )
+    summary["links_csv"] = str(directory / "type2_links.csv")
+    summary["by_link"] = write_link_summary(summary["events_csv"], manifest_path, summary["links_csv"])
     _write_json(summary["summary_path"], summary)
+    # Make new CSV, PDML, JSON, log, and HTML files editable by every VM user.
+    share_result_permissions(directory)
     return summary
 
 
@@ -543,7 +609,11 @@ def capture_analyze(session):
             raise RuntimeError("Capture is not cleanly stopped; inspect " + capture["log_path"])
         paths.append(capture["pcap_path"])
     directory = Path(session["directory"])
-    return decode_captures(paths, directory / "analysis", directory / "capture_manifest.json")
+    summary = decode_captures(paths, directory / "analysis", directory / "capture_manifest.json")
+    # The caller may have written mobility_report.json after capture_stop.
+    # Share the whole completed run, including files outside analysis/.
+    share_result_permissions(directory)
+    return summary
 
 
 def main():
