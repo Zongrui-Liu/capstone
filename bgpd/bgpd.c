@@ -1088,7 +1088,9 @@ int peer_af_delete(struct peer *peer, afi_t afi, safi_t safi)
 	bgp_soft_reconfig_table_task_cancel(bgp, bgp->rib[afi][safi], peer);
 
 	bgp_stop_announce_route_timer(af);
-	event_cancel(&peer->t_llgr_stale[afi][safi]);
+	event_cancel(&af->t_refresh_stalepath);
+	UNSET_FLAG(peer->af_sflags[afi][safi], PEER_STATUS_ENHANCED_REFRESH);
+	event_cancel(&af->t_llgr_stale);
 
 	if (PAF_SUBGRP(af)) {
 		if (BGP_DEBUG(update_groups, UPDATE_GROUPS))
@@ -2701,8 +2703,11 @@ static void peer_group2peer_config_copy_af(struct peer_group *group,
 		PEER_ATTR_INHERIT(peer, group, allowas_in[afi][safi]);
 
 	/* soo */
-	if (!CHECK_FLAG(pflags_ovrd, PEER_FLAG_SOO))
-		PEER_ATTR_INHERIT(peer, group, soo[afi][safi]);
+	if (!CHECK_FLAG(pflags_ovrd, PEER_FLAG_SOO)) {
+		ecommunity_free(&peer->soo[afi][safi]);
+		if (group->conf->soo[afi][safi])
+			peer->soo[afi][safi] = ecommunity_dup(group->conf->soo[afi][safi]);
+	}
 
 	/* weight */
 	if (!CHECK_FLAG(pflags_ovrd, PEER_FLAG_WEIGHT))
@@ -2841,23 +2846,24 @@ static int peer_activate_af(struct peer *peer, afi_t afi, safi_t safi)
 	if (active != BGP_PEER_ACTIVE && peer_active(peer->connection) == BGP_PEER_ACTIVE) {
 		bgp_timer_set(peer->connection);
 	} else {
-		peer_set_last_reset(peer, PEER_DOWN_AF_ACTIVATE);
+		if (peer_established(peer->connection) && peer_cap_dynamic_nego(peer)) {
+			peer->afc_adv[afi][safi] = 1;
+			bgp_capability_send(peer->connection, afi, safi, CAPABILITY_CODE_MP,
+					    CAPABILITY_ACTION_SET);
 
-		if (peer_established(peer->connection)) {
-			if (CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV)) {
-				peer->afc_adv[afi][safi] = 1;
+			if (bgp_connection_enhe_af_adv(peer->connection, afi, safi))
 				bgp_capability_send(peer->connection, afi, safi,
-						    CAPABILITY_CODE_MP, CAPABILITY_ACTION_SET);
-				if (peer->afc_recv[afi][safi]) {
-					peer->afc_nego[afi][safi] = 1;
-					bgp_announce_route(peer, afi, safi,
-							   false);
-				}
-			} else {
-				peer_notify_config_change(peer->connection);
+						    CAPABILITY_CODE_ENHE, CAPABILITY_ACTION_SET);
+
+			if (peer->afc_recv[afi][safi]) {
+				peer->afc_nego[afi][safi] = 1;
+				update_group_adjust_peer(peer_af_find(peer, afi, safi));
+				bgp_announce_route(peer, afi, safi, false);
 			}
+		} else {
+			peer_set_last_reset(peer, PEER_DOWN_AF_ACTIVATE);
+			peer_notify_config_change(peer->connection);
 		}
-		peer_notify_config_change(peer->connection);
 
 		/*
 		 * If we are turning on a AFI/SAFI locally and we've
@@ -2887,6 +2893,22 @@ static int peer_activate_af(struct peer *peer, afi_t afi, safi_t safi)
 	}
 
 	return 0;
+}
+
+/*
+ * Name of the prefix-list holding the ORF the peer sent us for afi/safi.
+ * All BGP instances share one table of ORF prefix-lists, so the name must
+ * identify the instance as well as the peer: peers with the same address
+ * in different instances would otherwise share one list, and either one
+ * could delete it under the other. The default instance keeps the plain
+ * "<host>.<afi>.<safi>"; other instances append "_<instance>".
+ */
+void peer_orf_plist_name(const struct peer *peer, afi_t afi, safi_t safi, char *buf, size_t size)
+{
+	if (peer->bgp->name)
+		snprintfrr(buf, size, "%s.%d.%d_%s", peer->host, afi, safi, peer->bgp->name);
+	else
+		snprintfrr(buf, size, "%s.%d.%d", peer->host, afi, safi);
 }
 
 /* Activate the peer or peer group for specified AFI and SAFI.  */
@@ -2995,9 +3017,7 @@ static bool non_peergroup_deactivate_af(struct peer *peer, afi_t afi,
 	}
 
 	if (peer_established(peer->connection)) {
-		peer_set_last_reset(peer, PEER_DOWN_NEIGHBOR_DELETE);
-
-		if (CHECK_FLAG(peer->cap, PEER_CAP_DYNAMIC_RCV)) {
+		if (peer_cap_dynamic_nego(peer)) {
 			peer->afc_adv[afi][safi] = 0;
 			peer->afc_nego[afi][safi] = 0;
 
@@ -3007,10 +3027,13 @@ static bool non_peergroup_deactivate_af(struct peer *peer, afi_t afi,
 				bgp_clear_route(peer, afi, safi);
 				peer->pcount[afi][safi] = 0;
 			} else {
+				peer_set_last_reset(peer, PEER_DOWN_NEIGHBOR_DELETE);
 				peer_notify_config_change(peer->connection);
 			}
-		} else
+		} else {
+			peer_set_last_reset(peer, PEER_DOWN_NEIGHBOR_DELETE);
 			peer_notify_config_change(peer->connection);
+		}
 	}
 
 	if (afi == AFI_BGP_LS && safi == SAFI_BGP_LS) {
@@ -3105,13 +3128,17 @@ void peer_nsf_stop(struct peer *peer)
 {
 	afi_t afi;
 	safi_t safi;
+	struct peer_af *paf;
 
 	UNSET_FLAG(peer->sflags, PEER_STATUS_NSF_WAIT);
 	UNSET_FLAG(peer->sflags, PEER_STATUS_NSF_MODE);
 
 	FOREACH_AFI_SAFI_NSF (afi, safi) {
 		peer->nsf[afi][safi] = 0;
-		event_cancel(&peer->t_llgr_stale[afi][safi]);
+		paf = peer_af_find(peer, afi, safi);
+		if (paf)
+			event_cancel(&paf->t_llgr_stale);
+		UNSET_FLAG(peer->af_sflags[afi][safi], PEER_STATUS_LLGR_WAIT);
 	}
 
 	if (event_is_scheduled(peer->connection->t_gr_restart)) {
@@ -4696,7 +4723,7 @@ int bgp_delete(struct bgp *bgp)
 		vpn_leak_zebra_vrf_sid_withdraw(bgp, afi);
 
 		/* SRv6 unicast */
-		bgp_srv6_unicast_delete(bgp_default, afi);
+		bgp_srv6_unicast_delete(bgp, afi);
 	}
 
 	/* release auto vpn labels */
@@ -5594,12 +5621,8 @@ void peer_change_action(struct peer *peer, afi_t afi, safi_t safi,
 		peer_vpn_change_bestpath(peer, afi);
 	if (type == peer_change_reset_out || type == peer_change_best_path) {
 		paf = peer_af_find(peer, afi, safi);
-		if (paf && paf->subgroup)
-			SET_FLAG(paf->subgroup->sflags,
-				 SUBGRP_STATUS_FORCE_UPDATES);
-
 		update_group_adjust_peer(paf);
-		bgp_announce_route(peer, afi, safi, false);
+		bgp_announce_route(peer, afi, safi, true);
 	}
 }
 
@@ -8270,6 +8293,22 @@ int peer_prefix_list_unset(struct peer *peer, afi_t afi, safi_t safi,
 	return 0;
 }
 
+/*
+ * True if this peer's inbound route-map depends on the changed prefix-list and
+ * the route-map delay timer is enabled.
+ */
+static bool peer_inbound_rmap_with_delay_timer_depends_on_plist(
+	struct peer *peer, afi_t afi, safi_t safi, struct prefix_list *plist)
+{
+	struct bgp_filter *filter = &peer->filter[afi][safi];
+
+	if (!bm->rmap_update_timer || !filter->map[RMAP_IN].name)
+		return false;
+
+	return route_map_depends_on(RMAP_EVENT_PLIST_ADDED, prefix_list_name(plist),
+				    filter->map[RMAP_IN].name);
+}
+
 /* Update prefix-list list. */
 static void peer_prefix_list_update(struct prefix_list *plist)
 {
@@ -8320,6 +8359,13 @@ static void peer_prefix_list_update(struct prefix_list *plist)
 					peer_clear_soft(
 						peer, afi, safi,
 						BGP_CLEAR_SOFT_IN_ORF_PREFIX);
+				else if (plist && prefix_list_afi(plist) == afi &&
+					 filter->plist[FILTER_IN].name &&
+					 strmatch(filter->plist[FILTER_IN].name,
+						  prefix_list_name(plist)) &&
+						 !peer_inbound_rmap_with_delay_timer_depends_on_plist(
+							 peer, afi, safi, plist))
+					peer_on_policy_change(peer, afi, safi, 0);
 			}
 		}
 		for (ALL_LIST_ELEMENTS(bgp->group, node, nnode, group)) {
@@ -9434,7 +9480,7 @@ int peer_clear_soft(struct peer *peer, afi_t afi, safi_t safi,
 			UNSET_FLAG(paf->subgroup->sflags,
 				   SUBGRP_STATUS_DEFAULT_ORIGINATE);
 
-		bgp_announce_route(peer, afi, safi, false);
+		bgp_announce_route(peer, afi, safi, true);
 	}
 
 	if (stype == BGP_CLEAR_SOFT_IN_ORF_PREFIX) {
@@ -9780,9 +9826,7 @@ static int peer_unshut_after_cfg(struct bgp *bgp)
 		afi_t afi;
 		safi_t safi;
 
-		FOREACH_AFI_SAFI_NSF (afi, safi) {
-			if (!bgp_gr_supported_for_afi_safi(afi, safi))
-				continue;
+		FOREACH_AFI_SAFI_GR (afi, safi) {
 			/* Inform zebra */
 			bgp_zebra_update(bgp, afi, safi, ZEBRA_CLIENT_ROUTE_UPDATE_PENDING);
 			bgp_zebra_update(bgp, afi, safi, ZEBRA_CLIENT_ROUTE_UPDATE_COMPLETE);
@@ -10175,7 +10219,7 @@ void bgp_clearing_batch_completed(struct bgp_clearing_info *cinfo)
 			   cinfo->total_counter);
 
 	/* Ensure event is not scheduled */
-	event_cancel_event(bm->master, &cinfo->t_sched);
+	event_cancel(&cinfo->t_sched);
 
 	/* Remove all peers and un-ref */
 	while ((peer = bgp_clearing_hash_pop_all(&cinfo->peers, &idx)) != NULL)

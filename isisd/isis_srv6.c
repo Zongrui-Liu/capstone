@@ -65,6 +65,14 @@ static void isis_srv6_sid_structure_init(struct isis_srv6_sid_structure *structu
 	case SRV6_ENDPOINT_BEHAVIOR_END_DT46_USID:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_NEXT_CSID:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED_NEXT_CSID:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2M:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2M:
 	case SRV6_ENDPOINT_BEHAVIOR_OPAQUE:
 		break;
 	}
@@ -198,8 +206,9 @@ bool isis_srv6_locator_unset(struct isis_area *area)
 
 	/* Delete chunks */
 	for (ALL_LIST_ELEMENTS(area->srv6db.srv6_locator_chunks, node, nnode, chunk)) {
-		sr_debug("Releasing chunk of locator %s (prefix %pFX) for IS-IS area %s",
-			 area->srv6db.config.srv6_locator_name, &chunk->prefix, area->area_tag);
+		sr_debug("Releasing chunk of locator %s (prefix (%s:%u:%u)%pFX) for IS-IS area %s",
+			 area->srv6db.config.srv6_locator_name, ISIS_DEBUG_VRF(area->isis),
+			 &chunk->prefix, area->area_tag);
 
 		listnode_delete(area->srv6db.srv6_locator_chunks, chunk);
 		srv6_locator_chunk_free(&chunk);

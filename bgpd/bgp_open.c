@@ -912,6 +912,8 @@ static int bgp_capability_hostname(struct peer_connection *connection,
 	struct peer *peer = connection->peer;
 	struct stream *s = BGP_INPUT(connection);
 	char str[BGP_MAX_HOSTNAME + 1];
+	char *new_hostname = NULL;
+	char *new_domainname = NULL;
 	size_t end = stream_get_getp(s) + hdr->length;
 	uint8_t len;
 
@@ -946,18 +948,14 @@ static int bgp_capability_hostname(struct peer_connection *connection,
 	}
 
 	str[len] = '\0';
-
-	XFREE(MTYPE_BGP_PEER_HOST, peer->hostname);
-	XFREE(MTYPE_BGP_PEER_HOST, peer->domainname);
-
-	peer->hostname = XSTRDUP(MTYPE_BGP_PEER_HOST, str);
+	new_hostname = XSTRDUP(MTYPE_BGP_PEER_HOST, str);
 
 	if (stream_get_getp(s) + 1 > end) {
 		flog_warn(
 			EC_BGP_CAPABILITY_INVALID_DATA,
 			"%s: Received invalid domain name len (hostname capability) from peer %s",
 			__func__, peer->host);
-		XFREE(MTYPE_BGP_PEER_HOST, peer->hostname);
+		XFREE(MTYPE_BGP_PEER_HOST, new_hostname);
 		return -1;
 	}
 
@@ -967,7 +965,7 @@ static int bgp_capability_hostname(struct peer_connection *connection,
 			EC_BGP_CAPABILITY_INVALID_DATA,
 			"%s: Received runt domain name (hostname capability) from peer %s",
 			__func__, peer->host);
-		XFREE(MTYPE_BGP_PEER_HOST, peer->hostname);
+		XFREE(MTYPE_BGP_PEER_HOST, new_hostname);
 		return -1;
 	}
 
@@ -981,16 +979,19 @@ static int bgp_capability_hostname(struct peer_connection *connection,
 	if (len) {
 		str[len] = '\0';
 
-		XFREE(MTYPE_BGP_PEER_HOST, peer->domainname);
-
-		peer->domainname = XSTRDUP(MTYPE_BGP_PEER_HOST, str);
+		new_domainname = XSTRDUP(MTYPE_BGP_PEER_HOST, str);
 	}
+
+	XFREE(MTYPE_BGP_PEER_HOST, peer->hostname);
+	XFREE(MTYPE_BGP_PEER_HOST, peer->domainname);
+	peer->hostname = new_hostname;
+	peer->domainname = new_domainname;
 
 	SET_FLAG(peer->cap, PEER_CAP_HOSTNAME_RCV);
 
 	if (bgp_debug_neighbor_events(peer)) {
-		zlog_debug("%s received hostname %s, domainname %s", peer->host,
-			   peer->hostname, peer->domainname);
+		zlog_debug("%s received hostname %s, domainname %s", peer->host, peer->hostname,
+			   peer->domainname ? peer->domainname : "n/a");
 	}
 
 	return 0;
@@ -1379,11 +1380,11 @@ as_t peek_for_as4_capability(struct peer_connection *connection, uint16_t length
 
 		/*
 		 * Check the length and fetch the opt_length
-		 * If the peer is BGP_OPEN_EXT_OPT_PARAMS_CAPABLE(peer)
+		 * If the peer sent the extended format (RFC 9072)
 		 * then we do a getw which is 2 bytes.  So we need to
 		 * ensure that we can read that as well
 		 */
-		if (BGP_OPEN_EXT_OPT_PARAMS_CAPABLE(peer)) {
+		if (CHECK_FLAG(peer->sflags, PEER_STATUS_EXT_OPT_PARAMS_LENGTH)) {
 			if (stream_get_getp(s) + 2 > end)
 				goto end;
 
@@ -1503,7 +1504,7 @@ int bgp_open_option_parse(struct peer_connection *connection, uint16_t length, i
 		 * Check the length of the stream to ensure that
 		 * FRR can properly read the opt_length. Then read it
 		 */
-		if (BGP_OPEN_EXT_OPT_PARAMS_CAPABLE(peer)) {
+		if (CHECK_FLAG(peer->sflags, PEER_STATUS_EXT_OPT_PARAMS_LENGTH)) {
 			if (STREAM_READABLE(s) < 2) {
 				zlog_err("%s Option length error", peer->host);
 				bgp_notify_send(connection, BGP_NOTIFY_OPEN_ERR,
@@ -1739,12 +1740,10 @@ static void bgp_peer_send_gr_capability(struct stream *s, struct peer_connection
 	 * only when GR config is present
 	 */
 	if (CHECK_FLAG(peer->flags, PEER_FLAG_GRACEFUL_RESTART)) {
-		FOREACH_AFI_SAFI (afi, safi) {
+		FOREACH_AFI_SAFI_GR (afi, safi) {
 			bool f_bit = false;
 
 			if (!peer->afc[afi][safi])
-				continue;
-			if (!bgp_gr_supported_for_afi_safi(afi, safi))
 				continue;
 
 			/* Convert AFI, SAFI to values for
@@ -1894,10 +1893,7 @@ uint16_t bgp_open_capability(struct stream *s, struct peer_connection *connectio
 			 * supporting RFC-5549 for
 			 * Link-Local peering only
 			 */
-			if (CHECK_FLAG(peer->flags, PEER_FLAG_CAPABILITY_ENHE) &&
-			    connection->su.sa.sa_family == AF_INET6 && afi == AFI_IP &&
-			    (safi == SAFI_UNICAST || safi == SAFI_MPLS_VPN ||
-			     safi == SAFI_LABELED_UNICAST)) {
+			if (bgp_connection_enhe_af_adv(connection, afi, safi)) {
 				/* RFC 5549 Extended Next Hop Encoding
 				 */
 				SET_FLAG(peer->cap, PEER_CAP_ENHE_ADV);

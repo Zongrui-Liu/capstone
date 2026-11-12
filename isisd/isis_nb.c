@@ -89,6 +89,14 @@ const struct frr_yang_module_info frr_isisd_info = {
 			}
 		},
 		{
+			.xpath = "/frr-isisd:isis/instance/leak",
+			.cbs = {
+				.cli_show = cli_show_isis_leak,
+				.create = isis_instance_leak_create,
+				.destroy = isis_instance_leak_destroy,
+			}
+		},
+		{
 			.xpath = "/frr-isisd:isis/instance/metric-style",
 			.cbs = {
 				.cli_show = cli_show_isis_metric_style,
@@ -1137,6 +1145,20 @@ const struct frr_yang_module_info frr_isisd_info = {
 			.cbs = {
 				.cli_show = cli_show_ip_isis_threeway_shake,
 				.modify = lib_interface_isis_disable_three_way_handshake_modify,
+			},
+		},
+		{
+			.xpath = "/frr-interface:lib/interface/frr-isisd:isis/disable-p2p-periodic-csnp",
+			.cbs = {
+				.cli_show = cli_show_ip_isis_periodic_csnp,
+				.modify = lib_interface_isis_disable_p2p_periodic_csnp_modify,
+			},
+		},
+		{
+			.xpath = "/frr-interface:lib/interface/frr-isisd:isis/ipv4-over-ipv6-nexthop",
+			.cbs = {
+				.cli_show = cli_show_ip_isis_ipv4_over_ipv6_nexthop,
+				.modify = lib_interface_isis_ipv4_over_ipv6_nexthop_modify,
 			},
 		},
 		{

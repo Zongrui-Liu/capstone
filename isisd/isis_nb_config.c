@@ -33,6 +33,7 @@
 #include "isisd/isis_misc.h"
 #include "isisd/isis_csm.h"
 #include "isisd/isis_adjacency.h"
+#include "isisd/isis_pdu.h"
 #include "isisd/isis_spf.h"
 #include "isisd/isis_spf_private.h"
 #include "isisd/isis_srv6.h"
@@ -357,6 +358,42 @@ int isis_instance_overload_on_startup_modify(struct nb_cb_modify_args *args)
 	overload_time = yang_dnode_get_uint32(args->dnode, NULL);
 	area = nb_running_get_entry(args->dnode, NULL, true);
 	isis_area_overload_on_startup_set(area, overload_time);
+
+	return NB_OK;
+}
+
+/*
+ * XPath: /frr-isisd:isis/instance/leak
+ */
+int isis_instance_leak_create(struct nb_cb_create_args *args)
+{
+	struct isis_area *area;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	/* The YANG model only allows level-1 into level-2 for now */
+	area = nb_running_get_entry(args->dnode, NULL, true);
+	area->leak_l1_to_l2 = true;
+
+	/* Add the leaked prefixes to the level-2 LSP */
+	lsp_leak_l1_to_l2_check(area);
+
+	return NB_OK;
+}
+
+int isis_instance_leak_destroy(struct nb_cb_destroy_args *args)
+{
+	struct isis_area *area;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	area = nb_running_get_entry(args->dnode, NULL, true);
+	area->leak_l1_to_l2 = false;
+
+	/* Remove the leaked prefixes from the level-2 LSP */
+	lsp_leak_l1_to_l2_check(area);
 
 	return NB_OK;
 }
@@ -4020,6 +4057,72 @@ int lib_interface_isis_disable_three_way_handshake_modify(struct nb_cb_modify_ar
 
 	circuit = nb_running_get_entry(args->dnode, NULL, true);
 	circuit->disable_threeway_adj = yang_dnode_get_bool(args->dnode, NULL);
+
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-interface:lib/interface/frr-isisd:isis/disable-p2p-periodic-csnp
+ */
+int lib_interface_isis_disable_p2p_periodic_csnp_modify(struct nb_cb_modify_args *args)
+{
+	struct isis_circuit *circuit;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	circuit = nb_running_get_entry(args->dnode, NULL, true);
+	circuit->disable_p2p_periodic_csnp = yang_dnode_get_bool(args->dnode, NULL);
+
+	if (circuit->circ_type != CIRCUIT_T_P2P)
+		return NB_OK;
+
+	/* Turned off: drop the pending periodic CSNPs. */
+	if (circuit->disable_p2p_periodic_csnp) {
+		event_cancel(&circuit->t_send_csnp[0]);
+		event_cancel(&circuit->t_send_csnp[1]);
+		return NB_OK;
+	}
+
+	/* Turned back on: re-arm the timer on the circuit's levels with an adjacency up. */
+	for (int level = ISIS_LEVEL1; level <= ISIS_LEVEL2; level++) {
+		if (!(circuit->is_type & level) || !circuit->upadjcount[level - 1])
+			continue;
+		event_add_timer(master, level == IS_LEVEL_1 ? send_l1_csnp : send_l2_csnp, circuit,
+				isis_jitter(circuit->csnp_interval[level - 1], CSNP_JITTER),
+				&circuit->t_send_csnp[level - 1]);
+	}
+
+	return NB_OK;
+}
+
+/*
+ * XPath:
+ * /frr-interface:lib/interface/frr-isisd:isis/ipv4-over-ipv6-nexthop
+ */
+int lib_interface_isis_ipv4_over_ipv6_nexthop_modify(struct nb_cb_modify_args *args)
+{
+	struct isis_circuit *circuit;
+	struct isis_area *area;
+
+	if (args->event != NB_EV_APPLY)
+		return NB_OK;
+
+	circuit = nb_running_get_entry(args->dnode, NULL, true);
+	circuit->ipv4_over_ipv6_nexthop = yang_dnode_get_bool(args->dnode, NULL);
+
+	/*
+	 * Nexthops are computed locally, so no LSP changes: rerun SPF. An MT
+	 * adjacency's IPv4 topology membership follows on the neighbor's next IIH.
+	 */
+	area = circuit->area;
+	if (!area)
+		return NB_OK;
+	if (area->is_type & IS_LEVEL_1)
+		isis_spf_schedule(area, IS_LEVEL_1);
+	if (area->is_type & IS_LEVEL_2)
+		isis_spf_schedule(area, IS_LEVEL_2);
 
 	return NB_OK;
 }

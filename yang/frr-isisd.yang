@@ -793,6 +793,32 @@ module frr-isisd {
         "Disables three-way handshake when creating new adjacencies.";
     }
 
+    leaf disable-p2p-periodic-csnp {
+      type boolean;
+      default "false";
+      description
+        "On a point-to-point circuit, send a complete set of CSNPs only
+         when an adjacency comes up (RFC 5303 section 1), not every
+         CSNP interval.";
+      reference
+        "RFC 5303: Three-Way Handshake for IS-IS Point-to-Point
+         Adjacencies, section 1";
+    }
+
+    leaf ipv4-over-ipv6-nexthop {
+      type boolean;
+      default "false";
+      description
+        "Route IPv4 over this interface when it has no usable IPv4 nexthop,
+         using the neighbor's IPv6 link-local address as the nexthop of IPv4
+         routes.";
+      reference
+        "RFC 8950: Advertising IPv4 Network Layer Reachability Information
+         (NLRI) with an IPv6 Next Hop
+         RFC 9229: IPv4 Routes with an IPv6 Next Hop in the Babel Routing
+         Protocol";
+    }
+
     container multi-topology {
       description
         "IS-IS topologies configured on this circuit.";
@@ -1242,6 +1268,37 @@ module frr-isisd {
         default "false";
         description
           "Advertise high metric value on all interfaces.";
+      }
+
+      list leak {
+        key "level-from level-to";
+        description
+          "Advertise the prefixes of a level in the LSP of another level
+           on a level-1-2 router. Only the leaking of level-1 prefixes
+           into level-2 is supported.";
+        reference
+          "RFC1195 section 1.3";
+
+        leaf level-from {
+          type level;
+          must ". != \"level-1-2\"" {
+            error-message "A single level is required.";
+          }
+          description
+            "Level of the prefixes.";
+        }
+
+        leaf level-to {
+          type level;
+          must ". != \"level-1-2\" and . != ../level-from" {
+            error-message "The two levels must be different.";
+          }
+          must "../level-from = \"level-1\" and . = \"level-2\"" {
+            error-message "Only the leaking of level-1 prefixes into level-2 is supported.";
+          }
+          description
+            "Level of the LSP in which the prefixes are advertised.";
+        }
       }
 
       leaf purge-originator {

@@ -1770,7 +1770,7 @@ static int ospf_te_export(uint8_t type, void *link_state)
  * @param metric	Standard metric attached to this Edge
  */
 static void ospf_te_update_link(struct ls_ted *ted, struct ls_vertex *vertex,
-				struct in_addr link_data, uint8_t metric)
+				struct in_addr link_data, uint32_t metric)
 {
 	struct ls_edge *edge;
 	struct ls_attributes *attr;
@@ -1822,8 +1822,8 @@ static void ospf_te_update_link(struct ls_ted *ted, struct ls_vertex *vertex,
  * @param p		Prefix associated to the Subnet
  * @param metric	Standard metric attached to this Edge
  */
-static void ospf_te_update_subnet(struct ls_ted *ted, struct ls_vertex *vertex,
-				  struct prefix *p, uint8_t metric)
+static void ospf_te_update_subnet(struct ls_ted *ted, struct ls_vertex *vertex, struct prefix *p,
+				  uint32_t metric)
 {
 	struct ls_subnet *subnet;
 	struct ls_prefix *ls_pref;
@@ -1857,9 +1857,9 @@ static void ospf_te_update_subnet(struct ls_ted *ted, struct ls_vertex *vertex,
 		subnet = ls_subnet_add(ted, ls_pref);
 	}
 
-	ote_debug("    |- %s subnet %pFX with metric %d",
-		  subnet->status == NEW ? "Add" : "Update", &subnet->key,
-		  ls_pref->metric);
+	ote_debug("    |- %s subnet (%s:%u:%u)%pFX with metric %d",
+		  subnet->status == NEW ? "Add" : "Update", OSPF_DEBUG_VRF_ID(VRF_DEFAULT),
+		  &subnet->key, ls_pref->metric);
 
 	/* Export Link State Subnet */
 	ospf_te_export(LS_MSG_TYPE_PREFIX, subnet);
@@ -1882,7 +1882,8 @@ static void ospf_te_delete_subnet(struct ls_ted *ted, struct in_addr addr)
 	p.family = AF_INET;
 	p.prefixlen = IPV4_MAX_BITLEN;
 	p.u.prefix4 = addr;
-	ote_debug("  |- Delete Subnet info. for Prefix %pFX", &p);
+	ote_debug("  |- Delete Subnet info. for Prefix (%s:%u:%u)%pFX",
+		  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), &p);
 	subnet = ls_find_subnet(ted, &p);
 
 	/* Remove subnet if found */
@@ -2893,8 +2894,8 @@ static int ospf_te_parse_ext_pref(struct ls_ted *ted, struct ospf_lsa *lsa)
 		subnet = ls_subnet_add(ted, ls_pref);
 	}
 
-	ote_debug("  |- Process Extended Prefix LSA %pI4 for subnet %pFX",
-		  &lsa->data->id, &pref);
+	ote_debug("  |- Process Extended Prefix LSA %pI4 for subnet (%s:%u:%u)%pFX",
+		  &lsa->data->id, OSPF_DEBUG_VRF_ID(VRF_DEFAULT), &pref);
 
 	/*
 	 * Check Extended Prefix TLV size against LSA size
@@ -2938,9 +2939,9 @@ static int ospf_te_parse_ext_pref(struct ls_ted *ted, struct ospf_lsa *lsa)
 
 	/* Export Subnet if needed */
 	if (subnet->status == NEW || subnet->status == UPDATE) {
-		ote_debug("  |- %s SID %d to subnet %pFX",
-			  subnet->status == NEW ? "Add" : "Update",
-			  ls_pref->sr.sid, &ls_pref->pref);
+		ote_debug("  |- %s SID %d to subnet (%s:%u:%u)%pFX",
+			  subnet->status == NEW ? "Add" : "Update", ls_pref->sr.sid,
+			  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), &ls_pref->pref);
 
 		ospf_te_export(LS_MSG_TYPE_PREFIX, subnet);
 		subnet->status = SYNC;
@@ -2996,8 +2997,8 @@ static int ospf_te_delete_ext_pref(struct ls_ted *ted, struct ospf_lsa *lsa)
 	if (!subnet)
 		return -1;
 
-	ote_debug("  |- Delete SID %d to subnet %pFX", subnet->ls_pref->sr.sid,
-		  &subnet->ls_pref->pref);
+	ote_debug("  |- Delete SID %d to subnet (%s:%u:%u)%pFX", subnet->ls_pref->sr.sid,
+		  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), &subnet->ls_pref->pref);
 
 	/* Remove Segment Routing information */
 	ls_pref = subnet->ls_pref;
@@ -3464,7 +3465,7 @@ static void ospf_te_init_ted(struct ls_ted *ted, struct ospf *ospf)
  *------------------------------------------------------------------------*/
 #define check_tlv_size(size, msg)                                                                           \
 	do {                                                                                                \
-		if (ntohs(tlvh->length) > size) {                                                           \
+		if (ntohs(tlvh->length) > size || TLV_BODY_SIZE(tlvh) < size) {                             \
 			if (vty != NULL)                                                                    \
 				vty_out(vty,                                                                \
 					"  Wrong %s TLV size: %d(expected %d). Skip subsequent TLVs!\n",    \
@@ -4238,6 +4239,8 @@ static uint16_t ospf_mpls_te_show_link_subtlv(struct vty *vty,
 	uint16_t sum = subtotal;
 
 	for (tlvh = tlvh0; sum < total; tlvh = TLV_HDR_NEXT(tlvh)) {
+		if (!tlv_fits(tlvh, total - sum))
+			return total;
 		switch (ntohs(tlvh->type)) {
 		case TE_LINK_SUBTLV_LINK_TYPE:
 			sum += show_vty_link_subtlv_link_type(vty, tlvh, json);
@@ -4340,6 +4343,8 @@ static void ospf_mpls_te_show_info(struct vty *vty, struct json_object *json,
 
 		next = NULL;
 		sub = total - sum;
+		if (!tlv_fits(tlvh, sub))
+			break;
 		switch (ntohs(tlvh->type)) {
 		case TE_TLV_ROUTER_ADDR:
 			if (json) {

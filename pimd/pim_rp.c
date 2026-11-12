@@ -91,9 +91,8 @@ void pim_rp_init(struct pim_instance *pim)
 	rn = route_node_get(pim->rp_table, &rp_info->group);
 	rn->info = rp_info;
 	if (PIM_DEBUG_PIM_TRACE)
-		zlog_debug("Allocated: %p for rp_info: %p(%pFX) Lock: %d", rn,
-			   rp_info, &rp_info->group,
-			   route_node_get_lock_count(rn));
+		zlog_debug("Allocated: %p for rp_info: %p((%s:%u:%u)%pFX) Lock: %d", rn, rp_info,
+			   PIM_DEBUG_VRF(pim->vrf), &rp_info->group, route_node_get_lock_count(rn));
 
 #if PIM_IPV == 6
 	/*
@@ -172,7 +171,8 @@ static int pim_rp_prefix_list_used(struct pim_instance *pim, const char *plist)
 
 /*
  * Given an RP's address, return the RP's rp_info that is an exact match for
- * 'group'
+ * 'group'. Prefix-list RPs are skipped: their group is 224.0.0.0/4 too, but
+ * they are looked up by prefix-list (`pim_rp_find_prefix_list`).
  */
 static struct rp_info *pim_rp_find_exact(struct pim_instance *pim, pim_addr rp,
 					 const struct prefix *group)
@@ -181,7 +181,7 @@ static struct rp_info *pim_rp_find_exact(struct pim_instance *pim, pim_addr rp,
 	struct rp_info *rp_info;
 
 	for (ALL_LIST_ELEMENTS_RO(pim->rp_list, node, rp_info)) {
-		if ((!pim_addr_cmp(rp, rp_info->rp.rpf_addr)) &&
+		if (!rp_info->plist && !pim_addr_cmp(rp, rp_info->rp.rpf_addr) &&
 		    prefix_same(&rp_info->group, group))
 			return rp_info;
 	}
@@ -239,8 +239,9 @@ struct rp_info *pim_rp_find_match_group(struct pim_instance *pim,
 			rp_info = rn->info ? rn->info : NULL;
 
 			if (rp_info && PIM_DEBUG_PIM_TRACE_DETAIL) {
-				zlog_debug("Lookedup(%pFX): rn %p found:%pFX", group, rn,
-					   &rp_info->group);
+				zlog_debug("Lookedup((%s:%u:%u)%pFX): rn %p found:(%s:%u:%u)%pFX",
+					   PIM_DEBUG_VRF(pim->vrf), group, rn,
+					   PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 			}
 
 			route_unlock_node(rn);
@@ -284,12 +285,13 @@ struct rp_info *pim_rp_find_match_group(struct pim_instance *pim,
 	rp_info = rn->info;
 	if (PIM_DEBUG_PIM_TRACE_DETAIL) {
 		if (best)
-			zlog_debug(
-				"Lookedup(%pFX): prefix_list match %s, rn %p found: %pFX",
-				group, best->plist, rn, &rp_info->group);
+			zlog_debug("Lookedup((%s:%u:%u)%pFX): prefix_list match %s, rn %p found: (%s:%u:%u)%pFX",
+				   PIM_DEBUG_VRF(pim->vrf), group, best->plist, rn,
+				   PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 		else
-			zlog_debug("Lookedup(%pFX): rn %p found:%pFX", group,
-				   rn, &rp_info->group);
+			zlog_debug("Lookedup((%s:%u:%u)%pFX): rn %p found:(%s:%u:%u)%pFX",
+				   PIM_DEBUG_VRF(pim->vrf), group, rn, PIM_DEBUG_VRF(pim->vrf),
+				   &rp_info->group);
 	}
 
 	route_unlock_node(rn);
@@ -323,11 +325,36 @@ struct rp_info *pim_rp_find_match_group(struct pim_instance *pim,
 }
 
 /*
+ * Return the all multicast (224.0.0.0/4 or ff00::/8) pseudo-RP: it always
+ * exists in the RP table, even when unconfigured (RP address is any), and it
+ * must not be confused with a prefix-list RP matching the same range.
+ */
+struct rp_info *pim_rp_get_root(struct pim_instance *pim)
+{
+	struct route_node *rn;
+	struct rp_info *rpi;
+	struct prefix g;
+
+	/* Can happen during shutdown, like in pim_rp_find_match_group. */
+	if (!pim->rp_table)
+		return NULL;
+
+	pim_get_all_mcast_group(&g);
+	rn = route_node_lookup(pim->rp_table, &g);
+	assertf(rn, "cannot find the all multicast pseudo-RP");
+	rpi = rn->info;
+	route_unlock_node(rn);
+	return rpi;
+}
+
+/*
  * When the user makes "ip pim rp" configuration changes or if they change the
  * prefix-list(s) used by these statements we must tickle the upstream state
  * for each group to make them re-lookup who their RP should be.
  *
- * This is a placeholder function for now.
+ * Source registration follows RFC 7761 section 4.4.1: an FHR in Prune
+ * whose RP(G) changed or disappeared goes to Join and cancels the
+ * Register-Stop timer. Encapsulation uses the new RP when one exists.
  */
 void pim_rp_refresh_group_to_rp_mapping(struct pim_instance *pim)
 {
@@ -429,9 +456,9 @@ void pim_upstream_update(struct pim_instance *pim, struct pim_upstream *up)
 	if (!pim_addr_is_any(old_upstream_addr)) {
 		/* Deregister addr with Zebra NHT */
 		if (PIM_DEBUG_PIM_TRACE)
-			zlog_debug(
-				"%s: Deregister upstream %s addr %pPA with Zebra NHT",
-				__func__, up->sg_str, &old_upstream_addr);
+			zlog_debug("%s: Deregister upstream (%s:%u:%u)%s addr %pPA with Zebra NHT",
+				   __func__, PIM_DEBUG_VRF(up->pim->vrf), up->sg_str,
+				   &old_upstream_addr);
 		pim_nht_delete_tracked(pim, old_upstream_addr, up, NULL);
 	}
 
@@ -461,7 +488,6 @@ int pim_rp_new(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 	int result = 0;
 	struct rp_info *rp_info;
 	struct rp_info *rp_all;
-	struct prefix group_all;
 	struct listnode *node, *nnode;
 	struct rp_info *tmp_rp_info;
 	char buffer[BUFSIZ];
@@ -517,8 +543,7 @@ int pim_rp_new(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 
 		rp_info->plist = XSTRDUP(MTYPE_PIM_FILTER_NAME, plist);
 	} else {
-		pim_get_all_mcast_group(&group_all);
-		rp_all = pim_rp_find_match_group(pim, &group_all);
+		rp_all = pim_rp_get_root(pim);
 
 		/*
 		 * Barf if group is a non-multicast subnet
@@ -550,12 +575,16 @@ int pim_rp_new(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 			rp_all->rp_src = rp_src_flag;
 			XFREE(MTYPE_PIM_RP, rp_info);
 
+			/* Keep the RP list sorted by address. */
+			listnode_delete(pim->rp_list, rp_all);
+			listnode_add_sort(pim->rp_list, rp_all);
+
 			/* Register addr with Zebra NHT */
 			nht_p = rp_all->rp.rpf_addr;
 			if (PIM_DEBUG_PIM_NHT_RP)
-				zlog_debug(
-					"%s: NHT Register rp_all addr %pPA grp %pFX ",
-					__func__, &nht_p, &rp_all->group);
+				zlog_debug("%s: NHT Register rp_all addr %pPA grp (%s:%u:%u)%pFX ",
+					   __func__, &nht_p, PIM_DEBUG_VRF(pim->vrf),
+					   &rp_all->group);
 
 			frr_each (rb_pim_upstream, &pim->upstream_head, up) {
 				/* Find (*, G) upstream whose RP is not
@@ -580,8 +609,9 @@ int pim_rp_new(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 
 			pim_rp_check_interfaces(pim, rp_all);
 			if (rp_all->i_am_rp && PIM_DEBUG_PIM_NHT_RP)
-				zlog_debug("new RP %pPA for %pFX is ourselves",
-					   &rp_all->rp.rpf_addr, &rp_all->group);
+				zlog_debug("new RP %pPA for (%s:%u:%u)%pFX is ourselves",
+					   &rp_all->rp.rpf_addr, PIM_DEBUG_VRF(pim->vrf),
+					   &rp_all->group);
 			pim_rp_refresh_group_to_rp_mapping(pim);
 			pim_nht_find_or_track(pim, nht_p, NULL, rp_all, NULL);
 
@@ -604,9 +634,14 @@ int pim_rp_new(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 		}
 
 		/*
-		 * Barf if this group is already covered by some other RP
+		 * Barf if this group is already covered by some other RP. The
+		 * 224.0.0.0/4 pseudo-RP covers its range, even when a
+		 * prefix-list RP matches it too.
 		 */
-		tmp_rp_info = pim_rp_find_match_group(pim, &rp_info->group);
+		if (prefix_same(&rp_info->group, &rp_all->group))
+			tmp_rp_info = rp_all;
+		else
+			tmp_rp_info = pim_rp_find_match_group(pim, &rp_info->group);
 
 		if (tmp_rp_info) {
 			if (tmp_rp_info->plist) {
@@ -648,8 +683,8 @@ int pim_rp_new(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 	}
 
 	if (PIM_DEBUG_PIM_TRACE)
-		zlog_debug("Allocated: %p for rp_info: %p(%pFX) Lock: %d", rn,
-			   rp_info, &rp_info->group,
+		zlog_debug("Allocated: %p for rp_info: %p((%s:%u:%u)%pFX) Lock: %d", rn, rp_info,
+			   PIM_DEBUG_VRF(pim->vrf), &rp_info->group,
 			   rn ? route_node_get_lock_count(rn) : 0);
 
 	frr_each (rb_pim_upstream, &pim->upstream_head, up) {
@@ -672,15 +707,15 @@ int pim_rp_new(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 
 	pim_rp_check_interfaces(pim, rp_info);
 	if (rp_info->i_am_rp && PIM_DEBUG_PIM_NHT_RP)
-		zlog_debug("new RP %pPA for %pFX is ourselves",
-			   &rp_info->rp.rpf_addr, &rp_info->group);
+		zlog_debug("new RP %pPA for (%s:%u:%u)%pFX is ourselves", &rp_info->rp.rpf_addr,
+			   PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 	pim_rp_refresh_group_to_rp_mapping(pim);
 
 	/* Register addr with Zebra NHT */
 	nht_p = rp_info->rp.rpf_addr;
 	if (PIM_DEBUG_PIM_NHT_RP)
-		zlog_debug("%s: NHT Register RP addr %pPA grp %pFX with Zebra ",
-			   __func__, &nht_p, &rp_info->group);
+		zlog_debug("%s: NHT Register RP addr %pPA grp (%s:%u:%u)%pFX with Zebra ",
+			   __func__, &nht_p, PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 	pim_nht_find_or_track(pim, nht_p, NULL, rp_info, NULL);
 	if (!pim_nht_lookup_ecmp(pim, &rp_info->rp.source_nexthop, nht_p, &rp_info->group, true,
 				 NULL))
@@ -715,7 +750,6 @@ void pim_rp_del_config(struct pim_instance *pim, pim_addr rp_addr,
 int pim_rp_del(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 	       const char *plist, enum rp_source rp_src_flag)
 {
-	struct prefix g_all;
 	struct rp_info *rp_info;
 	struct rp_info *rp_all;
 	pim_addr nht_p;
@@ -741,32 +775,30 @@ int pim_rp_del(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 	}
 
 	if (PIM_DEBUG_PIM_TRACE)
-		zlog_debug("%s: Delete RP %pPA for the group %pFX", __func__,
-			   &rp_addr, &group);
+		zlog_debug("%s: Delete RP %pPA for the group (%s:%u:%u)%pFX", __func__, &rp_addr,
+			   PIM_DEBUG_VRF(pim->vrf), &group);
 
 	/* While static RP is getting deleted, we need to check if dynamic RP
 	 * present for the same group in BSM RP table, then install the dynamic
 	 * RP for the group node into the main rp table
 	 */
-	if (rp_src_flag == RP_SRC_STATIC) {
+	if (rp_src_flag == RP_SRC_STATIC && !was_plist) {
 		bsgrp = pim_bsm_get_bsgrp_node(&pim->global_scope, &group);
 
 		if (bsgrp) {
 			bsrp = bsm_rpinfos_first(bsgrp->bsrp_list);
 			if (bsrp) {
 				if (PIM_DEBUG_PIM_TRACE)
-					zlog_debug(
-						"%s: BSM RP %pPA found for the group %pFX",
-						__func__, &bsrp->rp_address,
-						&group);
+					zlog_debug("%s: BSM RP %pPA found for the group (%s:%u:%u)%pFX",
+						   __func__, &bsrp->rp_address,
+						   PIM_DEBUG_VRF(pim->vrf), &group);
 				return pim_rp_change(pim, bsrp->rp_address,
 						     group, RP_SRC_BSR);
 			}
 		} else {
 			if (PIM_DEBUG_PIM_TRACE)
-				zlog_debug(
-					"%s: BSM RP not found for the group %pFX",
-					__func__, &group);
+				zlog_debug("%s: BSM RP not found for the group (%s:%u:%u)%pFX",
+					   __func__, PIM_DEBUG_VRF(pim->vrf), &group);
 		}
 	}
 
@@ -777,8 +809,7 @@ int pim_rp_del(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 			   &nht_p);
 	pim_nht_delete_tracked(pim, nht_p, NULL, rp_info);
 
-	pim_get_all_mcast_group(&g_all);
-	rp_all = pim_rp_find_match_group(pim, &g_all);
+	rp_all = pim_rp_get_root(pim);
 
 	if (rp_all == rp_info) {
 		frr_each (rb_pim_upstream, &pim->upstream_head, up) {
@@ -803,6 +834,9 @@ int pim_rp_del(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 		}
 		rp_all->rp.rpf_addr = PIMADDR_ANY;
 		rp_all->i_am_rp = 0;
+		pim_nht_rp_del(rp_all);
+
+		pim_rp_refresh_group_to_rp_mapping(pim);
 		return PIM_SUCCESS;
 	}
 
@@ -817,10 +851,9 @@ int pim_rp_del(struct pim_instance *pim, pim_addr rp_addr, struct prefix group,
 					"Expected rn->info to be equal to rp_info");
 
 			if (PIM_DEBUG_PIM_TRACE)
-				zlog_debug(
-					"%s:Found for Freeing: %p for rp_info: %p(%pFX) Lock: %d",
-					__func__, rn, rp_info, &rp_info->group,
-					route_node_get_lock_count(rn));
+				zlog_debug("%s:Found for Freeing: %p for rp_info: %p((%s:%u:%u)%pFX) Lock: %d",
+					   __func__, rn, rp_info, PIM_DEBUG_VRF(pim->vrf),
+					   &rp_info->group, route_node_get_lock_count(rn));
 
 			rn->info = NULL;
 			route_unlock_node(rn);
@@ -950,23 +983,22 @@ int pim_rp_change(struct pim_instance *pim, pim_addr new_rp_addr,
 	if (upstream_updated)
 		pim_zebra_update_all_interfaces(pim);
 
+	pim_rp_check_interfaces(pim, rp_info);
+
 	/* Register new RP addr with Zebra NHT */
 	nht_p = rp_info->rp.rpf_addr;
 	if (PIM_DEBUG_PIM_NHT_RP)
-		zlog_debug("%s: NHT Register RP addr %pPA grp %pFX with Zebra ",
-			   __func__, &nht_p, &rp_info->group);
+		zlog_debug("%s: NHT Register RP addr %pPA grp (%s:%u:%u)%pFX with Zebra ",
+			   __func__, &nht_p, PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 
 	pim_nht_find_or_track(pim, nht_p, NULL, rp_info, NULL);
 	if (!pim_nht_lookup_ecmp(pim, &rp_info->rp.source_nexthop, nht_p, &rp_info->group, true,
-				 NULL)) {
-		route_unlock_node(rn);
-		return PIM_RP_NO_PATH;
-	}
-
-	pim_rp_check_interfaces(pim, rp_info);
+				 NULL))
+		result = PIM_RP_NO_PATH;
 
 	route_unlock_node(rn);
 
+	/* The RP changed even if it is unreachable. */
 	pim_rp_refresh_group_to_rp_mapping(pim);
 
 	return result;
@@ -1131,9 +1163,8 @@ struct pim_rpf *pim_rp_g(struct pim_instance *pim, pim_addr group)
 		/* Register addr with Zebra NHT */
 		nht_p = rp_info->rp.rpf_addr;
 		if (PIM_DEBUG_PIM_NHT_RP)
-			zlog_debug(
-				"%s: NHT Register RP addr %pPA grp %pFX with Zebra",
-				__func__, &nht_p, &rp_info->group);
+			zlog_debug("%s: NHT Register RP addr %pPA grp (%s:%u:%u)%pFX with Zebra",
+				   __func__, &nht_p, PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 		pim_nht_find_or_track(pim, nht_p, NULL, rp_info, NULL);
 		pim_rpf_set_refresh_time(pim);
 		if (!pim_nht_lookup_ecmp(pim, &rp_info->rp.source_nexthop, nht_p, &rp_info->group,
@@ -1516,13 +1547,13 @@ void pim_embedded_rp_new(struct pim_instance *pim, const pim_addr *group, const 
 	pim_zebra_update_all_interfaces(pim);
 	pim_rp_check_interfaces(pim, rp_info);
 	if (rp_info->i_am_rp && PIM_DEBUG_PIM_NHT_RP)
-		zlog_debug("new RP %pPA for %pFX is ourselves", &rp_info->rp.rpf_addr,
-			   &rp_info->group);
+		zlog_debug("new RP %pPA for (%s:%u:%u)%pFX is ourselves", &rp_info->rp.rpf_addr,
+			   PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 
 	pim_rp_refresh_group_to_rp_mapping(pim);
 	if (PIM_DEBUG_PIM_NHT_RP)
-		zlog_debug("%s: NHT Register RP addr %pPA grp %pFX with Zebra", __func__,
-			   &rp_info->rp.rpf_addr, &rp_info->group);
+		zlog_debug("%s: NHT Register RP addr %pPA grp (%s:%u:%u)%pFX with Zebra", __func__,
+			   &rp_info->rp.rpf_addr, PIM_DEBUG_VRF(pim->vrf), &rp_info->group);
 
 	pim_nht_find_or_track(pim, rp_info->rp.rpf_addr, NULL, rp_info, NULL);
 	if (!pim_nht_lookup_ecmp(pim, &rp_info->rp.source_nexthop, rp_info->rp.rpf_addr,

@@ -739,6 +739,10 @@ void static_zebra_srv6_sid_install(struct static_srv6_sid *sid)
 		ctx.ifindex = ifp->ifindex;
 		SET_SRV6_FLV_OP(ctx.flv.flv_ops, ZEBRA_SEG6_LOCAL_FLV_OP_NEXT_CSID);
 		break;
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2M:
 	case SRV6_ENDPOINT_BEHAVIOR_END_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_X:
@@ -750,6 +754,10 @@ void static_zebra_srv6_sid_install(struct static_srv6_sid *sid)
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_NEXT_CSID:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED_NEXT_CSID:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2M:
 	case SRV6_ENDPOINT_BEHAVIOR_OPAQUE:
 	case SRV6_ENDPOINT_BEHAVIOR_RESERVED:
 		zlog_warn("unsupported behavior: %u", sid->behavior);
@@ -941,6 +949,10 @@ void static_zebra_srv6_sid_uninstall(struct static_srv6_sid *sid)
 		ctx.ifindex = ifp->ifindex;
 		SET_SRV6_FLV_OP(ctx.flv.flv_ops, ZEBRA_SEG6_LOCAL_FLV_OP_NEXT_CSID);
 		break;
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2M:
 	case SRV6_ENDPOINT_BEHAVIOR_END_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_X:
@@ -952,6 +964,10 @@ void static_zebra_srv6_sid_uninstall(struct static_srv6_sid *sid)
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_NEXT_CSID:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED_NEXT_CSID:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2M:
 	case SRV6_ENDPOINT_BEHAVIOR_OPAQUE:
 	case SRV6_ENDPOINT_BEHAVIOR_RESERVED:
 		zlog_warn("unsupported behavior: %u", sid->behavior);
@@ -1122,6 +1138,10 @@ extern void static_zebra_request_srv6_sid(struct static_srv6_sid *sid)
 		}
 		ctx.ifindex = ifp->ifindex;
 		break;
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2M:
 	case SRV6_ENDPOINT_BEHAVIOR_END_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_X:
@@ -1135,6 +1155,10 @@ extern void static_zebra_request_srv6_sid(struct static_srv6_sid *sid)
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_NEXT_CSID:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED_NEXT_CSID:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2M:
 		zlog_warn("unsupported behavior: %u", sid->behavior);
 		return;
 	}
@@ -1155,6 +1179,11 @@ extern void static_zebra_release_srv6_sid(struct static_srv6_sid *sid)
 
 	if (!sid || !CHECK_FLAG(sid->flags, STATIC_FLAG_SRV6_SID_VALID))
 		return;
+
+	if (!sid->locator) {
+		zlog_err("Failed to release SID %pFX: missing locator information", &sid->addr);
+		return;
+	}
 
 	/* convert `srv6_endpoint_behavior_codepoint` to `seg6local_action_t` */
 	switch (sid->behavior) {
@@ -1214,6 +1243,10 @@ extern void static_zebra_release_srv6_sid(struct static_srv6_sid *sid)
 		}
 		ctx.ifindex = ifp->ifindex;
 		break;
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_END_DT2M:
 	case SRV6_ENDPOINT_BEHAVIOR_END_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_NEXT_CSID_PSP_USD:
 	case SRV6_ENDPOINT_BEHAVIOR_END_X:
@@ -1227,6 +1260,10 @@ extern void static_zebra_release_srv6_sid(struct static_srv6_sid *sid)
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_NEXT_CSID:
 	case SRV6_ENDPOINT_BEHAVIOR_END_B6_ENCAPS_RED_NEXT_CSID:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2:
+	case SRV6_ENDPOINT_BEHAVIOR_UDX2V:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2U:
+	case SRV6_ENDPOINT_BEHAVIOR_UDT2M:
 		zlog_warn("unsupported behavior: %u", sid->behavior);
 		return;
 	}
@@ -1395,23 +1432,46 @@ static int static_zebra_process_srv6_locator_delete(ZAPI_CALLBACK_ARGS)
 	return 0;
 }
 
+/*
+ * Configured SIDs can share an address and differ only in prefix length, and
+ * only a SID with a resolved locator can have asked zebra for one.
+ */
+static struct static_srv6_sid *static_zebra_srv6_sid_notify_lookup(const struct in6_addr *sid_addr,
+								   const char *locator_name)
+{
+	struct static_srv6_sid *sid;
+	struct listnode *node;
+
+	for (ALL_LIST_ELEMENTS_RO(srv6_sids, node, sid)) {
+		if (!sid->locator || !IPV6_ADDR_SAME(&sid->addr.prefix, sid_addr))
+			continue;
+
+		if (locator_name[0] != '\0' &&
+		    strncmp(sid->locator->name, locator_name, sizeof(sid->locator->name)) != 0)
+			continue;
+
+		return sid;
+	}
+
+	return NULL;
+}
+
 static int static_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 {
 	struct srv6_sid_ctx ctx;
 	struct in6_addr sid_addr;
 	enum zapi_srv6_sid_notify note;
 	uint32_t sid_func;
-	struct listnode *node;
 	char buf[256];
+	char locator_name[SRV6_LOCNAME_SIZE] = {};
 	struct static_srv6_sid *sid = NULL;
-	bool found = false;
 
 	if (!srv6_locators)
 		return -1;
 
 	/* Decode the received notification message */
 	if (!zapi_srv6_sid_notify_decode(zclient->ibuf, &ctx, &sid_addr, &sid_func, NULL, &note,
-					 NULL, 0)) {
+					 locator_name, sizeof(locator_name))) {
 		zlog_err("%s : error in msg decode", __func__);
 		return -1;
 	}
@@ -1428,14 +1488,8 @@ static int static_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 		DEBUGD(&static_dbg_srv6, "%s: SRv6 SID %pI6 %s ALLOCATED", __func__, &sid_addr,
 		       srv6_sid_ctx2str(buf, sizeof(buf), &ctx));
 
-		for (ALL_LIST_ELEMENTS_RO(srv6_sids, node, sid)) {
-			if (IPV6_ADDR_SAME(&sid->addr.prefix, &sid_addr)) {
-				found = true;
-				break;
-			}
-		}
-
-		if (!found || !sid) {
+		sid = static_zebra_srv6_sid_notify_lookup(&sid_addr, locator_name);
+		if (!sid) {
 			zlog_err("SRv6 SID %pI6 %s: not found", &sid_addr,
 				 srv6_sid_ctx2str(buf, sizeof(buf), &ctx));
 			return 0;
@@ -1458,14 +1512,8 @@ static int static_zebra_srv6_sid_notify(ZAPI_CALLBACK_ARGS)
 		DEBUGD(&static_dbg_srv6, "%s: SRv6 SID %pI6 %s: RELEASED", __func__, &sid_addr,
 		       srv6_sid_ctx2str(buf, sizeof(buf), &ctx));
 
-		for (ALL_LIST_ELEMENTS_RO(srv6_sids, node, sid)) {
-			if (IPV6_ADDR_SAME(&sid->addr.prefix, &sid_addr)) {
-				found = true;
-				break;
-			}
-		}
-
-		if (!found || !sid) {
+		sid = static_zebra_srv6_sid_notify_lookup(&sid_addr, locator_name);
+		if (!sid) {
 			zlog_err("SRv6 SID %pI6 %s: not found", &sid_addr,
 				 srv6_sid_ctx2str(buf, sizeof(buf), &ctx));
 			return 0;

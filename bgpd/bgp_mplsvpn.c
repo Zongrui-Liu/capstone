@@ -1802,8 +1802,8 @@ static bool vpn_leak_from_vrf_fill_srv6(struct attr *attr, struct bgp *from_bgp,
 	if (from_bgp->vpn_policy[afi].tovpn_sid_locator && from_bgp->vpn_policy[afi].tovpn_sid) {
 		struct srv6_locator *locator = from_bgp->vpn_policy[afi].tovpn_sid_locator;
 
-		struct bgp_attr_srv6_l3service *srv6_l3service =
-			XCALLOC(MTYPE_BGP_SRV6_L3SERVICE, sizeof(struct bgp_attr_srv6_l3service));
+		struct bgp_attr_srv6_service *srv6_l3service =
+			XCALLOC(MTYPE_BGP_SRV6_SERVICE, sizeof(struct bgp_attr_srv6_service));
 
 		encode_label(from_bgp->vpn_policy[afi].tovpn_sid_transpose_label, label);
 		srv6_l3service->sid_flags = 0x00;
@@ -1843,8 +1843,8 @@ static bool vpn_leak_from_vrf_fill_srv6(struct attr *attr, struct bgp *from_bgp,
 	}
 	if (from_bgp->tovpn_sid_locator && from_bgp->tovpn_sid) {
 		struct srv6_locator *locator = from_bgp->tovpn_sid_locator;
-		struct bgp_attr_srv6_l3service *srv6_l3service =
-			XCALLOC(MTYPE_BGP_SRV6_L3SERVICE, sizeof(struct bgp_attr_srv6_l3service));
+		struct bgp_attr_srv6_service *srv6_l3service =
+			XCALLOC(MTYPE_BGP_SRV6_SERVICE, sizeof(struct bgp_attr_srv6_service));
 
 		encode_label(from_bgp->tovpn_sid_transpose_label, label);
 		srv6_l3service->sid_flags = 0x00;
@@ -2027,6 +2027,11 @@ void vpn_leak_from_vrf_update(struct bgp *to_bgp,	     /* to */
 					   from_bgp->vpn_policy[afi]
 						   .rmap[BGP_VPN_POLICY_DIR_TOVPN]
 						   ->name);
+			/*
+			 * The path may have been exported before its
+			 * attributes changed: withdraw the stale VPN path.
+			 */
+			vpn_leak_from_vrf_withdraw(to_bgp, from_bgp, path_vrf);
 			return;
 		}
 	}
@@ -2038,6 +2043,7 @@ void vpn_leak_from_vrf_update(struct bgp *to_bgp,	     /* to */
 			zlog_debug("%s: %s skipping: waiting for a valid export rt list.",
 				   __func__, from_bgp->name_pretty);
 		bgp_attr_flush(&static_attr);
+		vpn_leak_from_vrf_withdraw(to_bgp, from_bgp, path_vrf);
 		return;
 	}
 

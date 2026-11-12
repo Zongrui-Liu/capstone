@@ -64,6 +64,7 @@ enum bgp_show_type {
 	bgp_show_type_damp_neighbor,
 	bgp_show_type_detail,
 	bgp_show_type_rpki,
+	bgp_show_type_aspa,
 	bgp_show_type_prefix_version,
 	bgp_show_type_self_originated,
 };
@@ -75,6 +76,10 @@ enum bgp_show_adj_route_type {
 	bgp_show_adj_route_bestpath,
 };
 
+struct bgp_aspa_show_filter {
+	int direction;
+	enum aspa_states state;
+};
 
 #define BGP_SHOW_SCODE_HEADER                                                  \
 	"Status codes:  s suppressed, d damped, "                              \
@@ -391,6 +396,8 @@ struct bgp_path_info {
 #define BGP_PATH_UPA                                                                              \
 	(1 << 22) /* Route has UPA marking (locally originated or received with UPA ExtCom) */
 #define BGP_PATH_UPA_DROP (1 << 23) /* UPA route has D-bit set (drop/blackhole) */
+/* Type-5 export was suppressed by skip-evpn-imported. */
+#define BGP_PATH_EVPN_TYPE5_SKIP_IMPORTED (1 << 24)
 
 	/* BGP route type.  This can be static, RIP, OSPF, BGP etc.  */
 	uint8_t type;
@@ -918,6 +925,10 @@ extern struct bgp_path_info_extra *
 bgp_path_info_extra_get(struct bgp_path_info *path);
 extern struct bgp_path_info_extra *bgp_evpn_path_info_extra_get(struct bgp_path_info *path);
 extern bool bgp_path_info_has_valid_label(const struct bgp_path_info *path);
+struct bgp_attr_srv6_service;
+extern void bgp_path_info_srv6_sid_transposed(const struct prefix *p, struct bgp_path_info *pi,
+					      struct bgp_attr_srv6_service *srv6_service,
+					      uint8_t type, safi_t safi, struct in6_addr *sid);
 extern void bgp_path_info_set_flag(struct bgp_dest *dest,
 				   struct bgp_path_info *path, uint32_t flag);
 extern void bgp_path_info_unset_flag(struct bgp_dest *dest,
@@ -1041,10 +1052,9 @@ extern void route_vty_out_overlay(struct vty *vty, const struct prefix *p,
 
 extern void bgp_notify_conditional_adv_scanner(struct update_subgroup *subgrp);
 
-extern void subgroup_process_announce_selected(struct update_subgroup *subgrp,
+extern bool subgroup_process_announce_selected(struct update_subgroup *subgrp,
 					       struct bgp_path_info *selected,
-					       struct bgp_dest *dest, afi_t afi,
-					       safi_t safi,
+					       struct bgp_dest *dest, afi_t afi, safi_t safi,
 					       uint32_t addpath_tx_id);
 
 extern bool subgroup_announce_check(struct bgp_dest *dest,
@@ -1140,6 +1150,10 @@ extern int bgp_path_info_cmp(struct bgp *bgp, struct bgp_path_info *new,
 	bgp_path_info_add_with_caller(__func__, (A), (B))
 #define bgp_path_info_free(B) bgp_path_info_free_with_caller(__func__, (B))
 extern void bgp_meta_queue_free(struct meta_queue *mq);
+#ifdef DEV_BUILD
+extern void bgp_meta_queue_plug(struct bgp *bgp);
+extern void bgp_meta_queue_unplug(struct bgp *bgp);
+#endif
 extern int early_route_process(struct bgp *bgp, struct bgp_dest *dest);
 extern int other_route_process(struct bgp *bgp, struct bgp_dest *dest);
 extern int eoiu_marker_process(struct bgp *bgp, struct bgp_dest *dest);

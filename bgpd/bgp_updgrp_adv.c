@@ -98,86 +98,89 @@ subgrp_announce_addpath_best_selected(struct bgp_dest *dest,
 	afi_t afi = SUBGRP_AFI(subgrp);
 	safi_t safi = SUBGRP_SAFI(subgrp);
 	struct peer *peer = SUBGRP_PEER(subgrp);
-	enum bgp_path_selection_reason reason;
-	char pfx_buf[PREFIX2STR_BUFFER] = {};
-	int paths_eq = 0;
-	struct list *list = list_new();
 	struct bgp_path_info *pi = NULL;
+	struct bgp_path_info *best = NULL;
 	uint16_t paths_count = 0;
 	uint16_t paths_limit = peer->addpath_paths_limit[afi][safi].receive;
 
-	if (peer->addpath_type[afi][safi] == BGP_ADDPATH_BEST_SELECTED) {
-		paths_limit =
-			paths_limit
-				? MIN(paths_limit,
-				      peer->addpath_best_selected[afi][safi])
-				: peer->addpath_best_selected[afi][safi];
+	for (pi = bgp_dest_get_bgp_path_info(dest); pi; pi = pi->next) {
+		if (CHECK_FLAG(pi->flags, BGP_PATH_SELECTED)) {
+			best = pi;
+			break;
+		}
+	}
 
-		while (paths_count++ < paths_limit) {
+	if (best && subgroup_process_announce_selected(subgrp, best, dest, afi, safi,
+						       bgp_addpath_id_for_peer(peer, afi, safi,
+									       &best->tx_addpath)))
+		paths_count++;
+
+	if (peer->addpath_type[afi][safi] == BGP_ADDPATH_BEST_SELECTED) {
+		enum bgp_path_selection_reason reason;
+		char pfx_buf[PREFIX2STR_BUFFER] = {};
+		int paths_eq = 0;
+		struct list *list = list_new();
+		uint16_t selected_limit = peer->addpath_best_selected[afi][safi];
+		uint16_t selected_count = 0;
+		uint16_t remaining = paths_limit ? paths_limit - paths_count : selected_limit;
+
+		/* Pick N next best paths excluding the bestpath */
+		while (listcount(list) < selected_limit && selected_count < remaining) {
 			struct bgp_path_info *exist = NULL;
 
-			for (pi = bgp_dest_get_bgp_path_info(dest); pi;
-			     pi = pi->next) {
-				if (listnode_lookup(list, pi))
+			for (pi = bgp_dest_get_bgp_path_info(dest); pi; pi = pi->next) {
+				if (pi == best || listnode_lookup(list, pi))
 					continue;
 
-				if (CHECK_FLAG(pi->flags, BGP_PATH_SELECTED))
-					continue;
-
-				if (bgp_path_info_cmp(peer->bgp, pi, exist,
-						      &paths_eq, NULL, 0,
-						      pfx_buf, afi, safi,
-						      &reason))
+				if (bgp_path_info_cmp(peer->bgp, pi, exist, &paths_eq, NULL, 0,
+						      pfx_buf, afi, safi, &reason))
 					exist = pi;
 			}
 
-			if (exist)
-				listnode_add(list, exist);
+			if (!exist)
+				break;
+
+			listnode_add(list, exist);
+
+			if (subgroup_process_announce_selected(
+				    subgrp, exist, dest, afi, safi,
+				    bgp_addpath_id_for_peer(peer, afi, safi, &exist->tx_addpath)))
+				selected_count++;
 		}
+
+		for (pi = bgp_dest_get_bgp_path_info(dest); pi; pi = pi->next) {
+			if (pi == best || listnode_lookup(list, pi))
+				continue;
+
+			subgroup_process_announce_selected(subgrp, NULL, dest, afi, safi,
+							   bgp_addpath_id_for_peer(peer, afi, safi,
+										   &pi->tx_addpath));
+		}
+
+		list_delete(&list);
+		return;
 	}
 
 	for (pi = bgp_dest_get_bgp_path_info(dest); pi; pi = pi->next) {
 		uint32_t id = bgp_addpath_id_for_peer(peer, afi, safi,
 						      &pi->tx_addpath);
 
-		if (peer->addpath_type[afi][safi] ==
-		    BGP_ADDPATH_BEST_SELECTED) {
-			if (listnode_lookup(list, pi))
-				subgroup_process_announce_selected(
-					subgrp, pi, dest, afi, safi, id);
-			else {
-				if (CHECK_FLAG(pi->flags, BGP_PATH_SELECTED))
-					continue;
+		if (pi == best)
+			continue;
 
-				subgroup_process_announce_selected(
-					subgrp, NULL, dest, afi, safi, id);
-			}
+		/* No Paths-Limit involved */
+		if (!paths_limit) {
+			subgroup_process_announce_selected(subgrp, pi, dest, afi, safi, id);
+			continue;
+		}
+
+		if (paths_count < paths_limit) {
+			if (subgroup_process_announce_selected(subgrp, pi, dest, afi, safi, id))
+				paths_count++;
 		} else {
-			/* No Paths-Limit involved */
-			if (!paths_limit) {
-				subgroup_process_announce_selected(subgrp, pi,
-								   dest, afi,
-								   safi, id);
-				continue;
-			}
-
-			/* If we have Paths-Limit capability, we MUST
-			 * not send more than the number of paths expected
-			 * by the peer.
-			 */
-			if (paths_count++ < paths_limit)
-				subgroup_process_announce_selected(subgrp, pi,
-								   dest, afi,
-								   safi, id);
-			else
-				subgroup_process_announce_selected(subgrp, NULL,
-								   dest, afi,
-								   safi, id);
+			subgroup_process_announce_selected(subgrp, NULL, dest, afi, safi, id);
 		}
 	}
-
-	if (list)
-		list_delete(&list);
 }
 
 static void subgrp_withdraw_stale_addpath(struct updwalk_context *ctx,
@@ -250,16 +253,6 @@ static int group_announce_route_walkcb(struct update_group *updgrp, void *arg)
 
 			subgrp_withdraw_stale_addpath(ctx, subgrp);
 			subgrp_announce_addpath_best_selected(ctx->dest, subgrp);
-
-			/* Process the bestpath last so the
-			 * "show [ip] bgp neighbor x.x.x.x advertised" output shows
-			 * the attributes from the bestpath.
-			 */
-			if (ctx->pi)
-				subgroup_process_announce_selected(
-					subgrp, ctx->pi, ctx->dest, afi, safi,
-					bgp_addpath_id_for_peer(peer, afi, safi,
-								&ctx->pi->tx_addpath));
 		} else {
 			/* Send withdrawals without waiting for coalesting timer
 			 * to expire.
@@ -442,14 +435,8 @@ static int update_group_announce_walkcb(struct update_group *updgrp, void *arg)
 {
 	struct update_subgroup *subgrp;
 
-	UPDGRP_FOREACH_SUBGRP (updgrp, subgrp) {
-		/* Avoid suppressing duplicate routes later
-		 * when processing in subgroup_announce_table().
-		 */
-		SET_FLAG(subgrp->sflags, SUBGRP_STATUS_FORCE_UPDATES);
-
+	UPDGRP_FOREACH_SUBGRP (updgrp, subgrp)
 		subgroup_announce_all(subgrp);
-	}
 
 	return UPDWALK_CONTINUE;
 }
@@ -660,7 +647,6 @@ bool bgp_adj_out_set_subgroup(struct bgp_dest *dest,
 	adj->adv = bgp_advertise_new();
 
 	adv = adj->adv;
-	adv->dest = dest;
 	assert(adv->pathi == NULL);
 	/* bgp_path_info adj_out reference */
 	adv->pathi = bgp_path_info_lock(path);
@@ -744,7 +730,6 @@ void bgp_adj_out_unset_subgroup(struct bgp_dest *dest, struct update_subgroup *s
 			/* We need advertisement structure.  */
 			adj->adv = bgp_advertise_new();
 			adv = adj->adv;
-			adv->dest = dest;
 			adv->adj = adj;
 
 			/*
@@ -842,9 +827,10 @@ void subgroup_announce_table(struct update_subgroup *subgrp,
 	SET_FLAG(subgrp->sflags, SUBGRP_STATUS_TABLE_REPARSING);
 
 	for (dest = bgp_table_top(table); dest; dest = bgp_route_next(dest)) {
-
-		if (addpath_capable)
+		if (addpath_capable) {
 			subgrp_announce_addpath_best_selected(dest, subgrp);
+			continue;
+		}
 
 		for (ri = bgp_dest_get_bgp_path_info(dest); ri; ri = ri->next) {
 
@@ -942,6 +928,43 @@ void subgroup_announce_route(struct update_subgroup *subgrp)
 		UNSET_FLAG(subgrp->sflags, SUBGRP_STATUS_FORCE_UPDATES);
 }
 
+/* Count the matching rules (and calls) in a route-map */
+static int route_map_match_rules(struct route_map *rmap)
+{
+	int count = 0;
+	struct route_map_rule *rule;
+	struct route_map_index *index;
+
+	for (index = rmap->head; index; index = index->next) {
+		/* Count match clauses */
+		for (rule = index->match_list.head; rule; rule = rule->next)
+			count++;
+		/* A "call" to another map may have conditions */
+		if (index->nextrm)
+			count++;
+	}
+
+	return count;
+}
+
+/* Perform the "set" operations in a route-map without "match" config */
+static route_map_result_t bgp_route_map_setting_only(struct bgp *bgp, struct route_map *rmap,
+						     uint8_t rmap_type, const struct prefix *p,
+						     struct attr *attr)
+{
+	struct bgp_path_info rmap_path = { 0 };
+	route_map_result_t ret;
+
+	rmap_path.attr = attr;
+	rmap_path.peer = bgp->peer_self;
+
+	SET_FLAG(bgp->peer_self->rmap_type, rmap_type);
+	ret = route_map_apply(rmap, p, &rmap_path);
+	bgp->peer_self->rmap_type = 0;
+
+	return ret;
+}
+
 void subgroup_default_originate(struct update_subgroup *subgrp, bool withdraw)
 {
 	struct bgp *bgp;
@@ -961,6 +984,8 @@ void subgroup_default_originate(struct update_subgroup *subgrp, bool withdraw)
 	safi_t safi_rib;
 	int pref = 65536;
 	int new_pref = 0;
+	int match_rules;
+	struct route_map *rmap;
 
 	if (!subgrp)
 		return;
@@ -1006,7 +1031,30 @@ void subgroup_default_originate(struct update_subgroup *subgrp, bool withdraw)
 		attr.mp_nexthop_len = IPV4_MAX_BYTELEN;
 	}
 
+	rmap = peer->default_rmap[afi][safi].map;
+
 	if (peer->default_rmap[afi][safi].name) {
+		if (!rmap || !rmap->head) {
+			/*
+			 * Route-map is configured but undefined or empty.
+			 * Treat as implicit deny - withdraw the default.
+			 */
+			if (!withdraw &&
+			    !CHECK_FLAG(subgrp->sflags, SUBGRP_STATUS_DEFAULT_ORIGINATE))
+				SET_FLAG(subgrp->sflags, SUBGRP_STATUS_DEFAULT_ORIGINATE);
+			withdraw = true;
+		}
+	}
+
+	match_rules = rmap ? route_map_match_rules(rmap) : 0;
+
+	/*
+	 * Walk the table if the route-map has match clauses, OR if it's a
+	 * set-only route-map but the bgp instance requires at least one
+	 * table route (backward-compatible behavior).
+	 */
+	if (rmap && (match_rules != 0 ||
+		     !CHECK_FLAG(bgp->flags, BGP_FLAG_DEFAULT_ORIGINATE_SETONLY_UNCONDITIONAL))) {
 		struct bgp_path_info tmp_pi = {0};
 
 		tmp_pi.peer = bgp->peer_self;
@@ -1038,6 +1086,10 @@ void subgroup_default_originate(struct update_subgroup *subgrp, bool withdraw)
 					if (new_pref < pref) {
 						pref = new_pref;
 						bgp_attr_flush(new_attr);
+						/* Clear reflection attributes - default-originate
+						 * is self-originated, not reflected.
+						 */
+						bgp_attr_clear_reflection(tmp_pi.attr);
 						new_attr = bgp_attr_intern(
 							tmp_pi.attr);
 					}
@@ -1112,6 +1164,7 @@ void subgroup_default_originate(struct update_subgroup *subgrp, bool withdraw)
 	} else {
 		if (!CHECK_FLAG(subgrp->sflags,
 				SUBGRP_STATUS_DEFAULT_ORIGINATE)) {
+			struct attr attr_copy;
 
 			/* The 'neighbor x.x.x.x default-originate' default will
 			 * act as an
@@ -1139,14 +1192,59 @@ void subgroup_default_originate(struct update_subgroup *subgrp, bool withdraw)
 				bgp_dest_unlock_node(dest);
 			}
 
-			/* Advertise the default route */
+			/*
+			 * Prepend local-AS for EBGP. Make a copy first since
+			 * new_attr may be interned (shared) when route-map
+			 * matched, and modifying it in place would corrupt
+			 * the attribute hash.
+			 */
+			bgp_attr_dup_into(&attr_copy, new_attr);
+
+			/* Apply set-only route-map to attr_copy (not new_attr)
+			 * to avoid memory leak - attr_copy will be flushed.
+			 * Only needed when table walk was skipped (new behavior).
+			 */
+			if (rmap && match_rules == 0 &&
+			    CHECK_FLAG(bgp->flags,
+				       BGP_FLAG_DEFAULT_ORIGINATE_SETONLY_UNCONDITIONAL)) {
+				if (bgp_route_map_setting_only(bgp, rmap, PEER_RMAP_TYPE_DEFAULT,
+							       &p, &attr_copy) == RMAP_DENYMATCH) {
+					/*
+					 * Route-map denied - withdraw default.
+					 * The flag may have been cleared by callers,
+					 * so withdraw unconditionally. This may send
+					 * an unnecessary withdraw, but a deny-only
+					 * route-map is not a practical scenario.
+					 */
+					bgp_attr_flush(&attr_copy);
+					aspath_unintern(&aspath);
+					subgroup_default_withdraw_packet(subgrp);
+					UNSET_FLAG(subgrp->sflags, SUBGRP_STATUS_DEFAULT_ORIGINATE);
+					return;
+				}
+				/* Clear reflection attributes - default-originate
+				 * is self-originated, not reflected.
+				 */
+				bgp_attr_clear_reflection(&attr_copy);
+			}
+
+			/* Add gshut community after set-only so route-map
+			 * cannot overwrite the shutdown signal.
+			 */
 			if (bgp_in_graceful_shutdown(bgp) ||
 			    (CHECK_FLAG(peer->flags, PEER_FLAG_GRACEFUL_SHUTDOWN)))
-				bgp_attr_add_gshut_community(new_attr);
+				bgp_attr_add_gshut_community(&attr_copy);
+
+			/* Handle "bgp max-med" */
+			if (bgp->maxmed_active)
+				bgp_attr_set_med(&attr_copy, bgp->maxmed_value);
+
+			bgp_peer_prepend_local_as(peer, afi, safi, &attr_copy);
 
 			SET_FLAG(subgrp->sflags,
 				 SUBGRP_STATUS_DEFAULT_ORIGINATE);
-			subgroup_default_update_packet(subgrp, new_attr, from);
+			subgroup_default_update_packet(subgrp, &attr_copy, from);
+			bgp_attr_flush(&attr_copy);
 		}
 	}
 

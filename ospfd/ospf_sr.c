@@ -777,7 +777,7 @@ static struct ospf_route *get_nexthop_by_addr(struct ospf *top,
 	if (top->new_table == NULL)
 		return NULL;
 
-	osr_debug("      |-  Search Nexthop for prefix %pFX",
+	osr_debug("      |-  Search Nexthop for prefix (%s:%u:%u)%pFX", OSPF_DEBUG_VRF(top),
 		  (struct prefix *)&p);
 
 	rn = route_node_lookup(top->new_table, (struct prefix *)&p);
@@ -898,8 +898,8 @@ static int compute_prefix_nhlfe(struct sr_prefix *srp)
 	struct sr_node *srnext;
 	int rc = -1;
 
-	osr_debug("    |-  Compute NHLFE for prefix %pFX",
-		  (struct prefix *)&srp->prefv4);
+	osr_debug("    |-  Compute NHLFE for prefix (%s:%u:%u)%pFX",
+		  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), (struct prefix *)&srp->prefv4);
 
 
 	/* First determine the nexthop */
@@ -1004,8 +1004,7 @@ static struct sr_link *get_ext_link_sid(struct tlv_header *tlvh, size_t size)
 	bool error_p = false;
 
 	/* Check TLV size */
-	if ((ntohs(tlvh->length) > size)
-	    || ntohs(tlvh->length) < EXT_TLV_LINK_SIZE) {
+	if (!tlv_fits(tlvh, size) || ntohs(tlvh->length) < EXT_TLV_LINK_SIZE) {
 		zlog_warn("Wrong Extended Link TLV size. Abort!");
 		return NULL;
 	}
@@ -1122,9 +1121,8 @@ static struct sr_prefix *get_ext_prefix_sid(struct tlv_header *tlvh,
 	uint32_t length = 0, sum = 0;
 
 	/* Check TLV size */
-	if ((ntohs(tlvh->length) > size)
-	    || ntohs(tlvh->length) < EXT_TLV_PREFIX_SIZE) {
-		zlog_warn("Wrong Extended Link TLV size. Abort!");
+	if (!tlv_fits(tlvh, size) || ntohs(tlvh->length) < EXT_TLV_PREFIX_SIZE) {
+		zlog_warn("Wrong Extended Prefix TLV size. Abort!");
 		return NULL;
 	}
 
@@ -1178,8 +1176,8 @@ static struct sr_prefix *get_ext_prefix_sid(struct tlv_header *tlvh,
 			sub_tlvh = TLV_HDR_NEXT(sub_tlvh);
 	}
 
-	osr_debug("  |-  Found SID %u for prefix %pFX", srp->sid,
-		  (struct prefix *)&srp->prefv4);
+	osr_debug("  |-  Found SID %u for prefix (%s:%u:%u)%pFX", srp->sid,
+		  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), (struct prefix *)&srp->prefv4);
 
 	return srp;
 }
@@ -2076,9 +2074,9 @@ void ospf_sr_update_local_prefix(struct interface *ifp, struct prefix *p)
 			srp->instance = ospf_ext_schedule_prefix_index(
 				ifp, srp->sid, &srp->prefv4, srp->flags);
 
-			osr_debug(
-				"  |-  Update Node SID %pFX - %u for self SR Node",
-				(struct prefix *)&srp->prefv4, srp->sid);
+			osr_debug("  |-  Update Node SID (%s:%u:%u)%pFX - %u for self SR Node",
+				  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), (struct prefix *)&srp->prefv4,
+				  srp->sid);
 
 			/* Install SID if NO-PHP is set and not EXPLICIT-NULL */
 			if (CHECK_FLAG(srp->flags, EXT_SUBTLV_PREFIX_SID_NPFLG)
@@ -2635,8 +2633,8 @@ DEFUN (sr_prefix_sid,
 		srp->nhlfe.label_out = MPLS_LABEL_IMPLICIT_NULL;
 	}
 
-	osr_debug("SR (%s): Add new index %u to Prefix %pFX", __func__, index,
-		  (struct prefix *)&srp->prefv4);
+	osr_debug("SR (%s): Add new index %u to Prefix (%s:%u:%u)%pFX", __func__, index,
+		  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), (struct prefix *)&srp->prefv4);
 
 	/* Get Interface and check if it is a Loopback */
 	ifp = if_lookup_prefix(&p, VRF_DEFAULT);
@@ -2649,9 +2647,8 @@ DEFUN (sr_prefix_sid,
 		 */
 		if (exist == NULL)
 			listnode_add(OspfSR.self->ext_prefix, srp);
-		zlog_info(
-			"Interface for prefix %pFX not found. Deferred LSA flooding",
-			&p);
+		zlog_info("Interface for prefix (%s:%u:%u)%pFX not found. Deferred LSA flooding",
+			  OSPF_DEBUG_VRF_ID(VRF_DEFAULT), &p);
 		return CMD_SUCCESS;
 	}
 

@@ -24,6 +24,7 @@ DECLARE_MTYPE(ROUTE_MAP_COMPILED);
 
 #define DEBUG_ROUTEMAP 0x01
 #define DEBUG_ROUTEMAP_DETAIL 0x02
+#define DEBUG_ROUTEMAP_TIMING 0x04
 extern uint32_t rmap_debug;
 
 /* Route map's type. */
@@ -287,6 +288,7 @@ DECLARE_QOBJ_TYPE(route_map);
 #define IS_MATCH_RPKI(C) (strmatch(C, "frr-bgp-route-map:rpki"))
 #define IS_MATCH_RPKI_EXTCOMMUNITY(C)                                          \
 	(strmatch(C, "frr-bgp-route-map:rpki-extcommunity"))
+#define IS_MATCH_ASPA(C) (strmatch(C, "frr-bgp-route-map:aspa"))
 #define IS_MATCH_PROBABILITY(C)                                                \
 	(strmatch(C, "frr-bgp-route-map:probability"))
 #define IS_MATCH_SRC_VRF(C)                                                    \
@@ -551,6 +553,8 @@ extern void
 route_map_notify_pentry_dependencies(const char *affected_name,
 				     struct prefix_list_entry *pentry,
 				     route_map_event_t event);
+extern bool route_map_depends_on(route_map_event_t event, const char *dep_name,
+				 const char *rmap_name);
 extern int generic_match_add(struct route_map_index *index,
 			     const char *command, const char *arg,
 			     route_map_event_t type,

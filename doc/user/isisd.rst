@@ -199,6 +199,20 @@ ISIS region
    - level-2-only
      Act as an area router only
 
+.. clicmd:: leak level-1 into level-2
+
+   A level-1-2 router advertises the prefixes reachable inside its level-1
+   area in its level-2 LSP (:rfc:`1195` section 1.3), so that level-2 routers
+   can reach them. The prefixes are taken from the level-1 LSPs of the routers
+   that are reachable in the level-1 SPT, with the metric of the path to the
+   advertising router added to the metric of the prefix. Prefixes that carry
+   the up/down bit are not advertised back into level-2 (:rfc:`5302` section
+   2). This requires wide metrics. It is disabled by default, so that the
+   level-2 routers do not learn more prefixes after an upgrade; use this
+   command on the level-1-2 routers to enable it, and the ``no`` form to
+   disable it again. Only the leaking of level-1 prefixes into level-2 is
+   supported.
+
 .. _isis-interface:
 
 ISIS interface
@@ -291,6 +305,46 @@ sessions.
 
    Enable or disable :rfc:`5303` Three-Way Handshake for P2P adjacencies.
    Three-Way Handshake is enabled by default.
+
+.. clicmd:: isis periodic-csnp
+
+   Enable or disable periodic CSNPs on a point-to-point circuit. When
+   disabled, a complete set of CSNPs is sent only when an adjacency comes
+   up, as described in :rfc:`5303`, instead of every ``isis csnp-interval``.
+   This saves bandwidth, at the cost of the periodic database check.
+   Periodic CSNPs are enabled by default. While they are disabled,
+   ``isis csnp-interval`` is not used on point-to-point circuits, and setting
+   a CSNP interval other than the default prints a warning. On a broadcast
+   circuit the DIS keeps sending periodic CSNPs: the setting has no effect
+   there, and setting it prints a warning.
+
+.. clicmd:: isis ipv4-over-ipv6-nexthop
+
+   Route IPv4 over this interface when it has no usable IPv4 nexthop, such
+   as when the interface has no IPv4 address. On an interface running both
+   ``ip router isis`` and ``ipv6 router isis``, an adjacency whose IPv4
+   addressing is missing on either side is used for IPv4 through the
+   neighbor's IPv6 link-local address, which becomes the nexthop of the IPv4
+   routes installed through it (as with BGP and :rfc:`8950`). Adjacencies
+   with usable IPv4 addressing keep IPv4 nexthops, so the option can be
+   enabled on some interfaces and not others.
+
+   The kernel must support IPv4 routes with IPv6 nexthops (Linux 5.2 or
+   later). Nothing in IS-IS tells a neighbor whether this is enabled, so
+   enable it on every router attached to a link without IPv4: a router
+   without it does not route IPv4 over that link, while its neighbors still
+   forward IPv4 to it over it.
+
+   Segment Routing prefix SIDs and Flexible Algorithm labels work over IPv6
+   link-local nexthops. Adjacency SIDs, and therefore TI-LFA repair paths,
+   are only allocated for IPv4 adjacencies that have IPv4 addresses.
+
+   LDP does not label IPv4 FECs over such links, so remote LFA cannot
+   protect prefixes through them. With LDP-IGP synchronization the link
+   needs LDP over IPv6: IPv4 LDP cannot form without IPv4 on the link, and
+   the link then stays at the maximum metric. MPLS-TE advertises the link's
+   attributes, but a link without interface addresses gets no edge in the
+   Traffic Engineering Database.
 
 .. clicmd:: isis fast-reroute lfa [level-1 | level-2]
 

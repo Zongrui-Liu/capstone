@@ -712,10 +712,10 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 	while (adv) {
 		const struct prefix *dest_p;
 
-		assert(adv->dest);
-		dest = adv->dest;
-		dest_p = bgp_dest_get_prefix(dest);
 		adj = adv->adj;
+		assert(adj->dest);
+		dest = adj->dest;
+		dest_p = bgp_dest_get_prefix(dest);
 		addpath_tx_id = adj->addpath_tx_id;
 		path = adv->pathi;
 
@@ -803,13 +803,20 @@ struct bpacket *subgroup_update_packet(struct update_subgroup *subgrp)
 					"u%" PRIu64 ":s%" PRIu64" attributes too long, cannot send UPDATE",
 					subgrp->update_group->id, subgrp->id);
 
-				/* Flush the FIFO update queue */
+				/* These attributes cannot fit even an empty packet.
+				 * Remove their pending advertisements and withdraw any
+				 * previously advertised paths (RFC 8654 section 4).
+				 * Other attribute groups remain queued for later packets.
+				 */
 				while (adv) {
 					struct bgp_adj_out *curr_adj = adv->adj;
+					struct bgp_dest *curr_dest = curr_adj->dest;
+					uint32_t curr_id = curr_adj->addpath_tx_id;
 
 					adv = bgp_advertise_clean_subgroup(subgrp, curr_adj);
+					bgp_adj_out_unset_subgroup(curr_dest, subgrp, curr_id);
 				}
-				return NULL;
+				return subgroup_withdraw_packet(subgrp);
 			}
 
 			if (BGP_DEBUG(update, UPDATE_OUT)
@@ -1038,9 +1045,9 @@ struct bpacket *subgroup_withdraw_packet(struct update_subgroup *subgrp)
 	while ((adv = bgp_adv_fifo_first(&subgrp->sync->withdraw)) != NULL) {
 		const struct prefix *dest_p;
 
-		assert(adv->dest);
 		adj = adv->adj;
-		dest = adv->dest;
+		assert(adj->dest);
+		dest = adj->dest;
 		dest_p = bgp_dest_get_prefix(dest);
 		addpath_tx_id = adj->addpath_tx_id;
 

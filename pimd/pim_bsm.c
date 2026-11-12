@@ -408,11 +408,7 @@ static void pim_on_g2rp_timer(struct event *t)
 	}
 
 	rp_info = (struct rp_info *)rn->info;
-
-	if (!rp_info) {
-		route_unlock_node(rn);
-		return;
-	}
+	route_unlock_node(rn);
 
 	if (rp_info->rp_src == RP_SRC_BSR) {
 		/* If new rp available, change it else delete the existing */
@@ -444,10 +440,10 @@ static void pim_g2rp_timer_start(struct bsm_rpinfo *bsrp, int hold_time)
 	}
 	event_cancel(&bsrp->g2rp_timer);
 	if (PIM_DEBUG_BSM)
-		zlog_debug(
-			"%s : starting g2rp timer for grp: %pFX - rp: %pPAs with timeout  %d secs(Actual Hold time : %d secs)",
-			__func__, &bsrp->bsgrp_node->group, &bsrp->rp_address,
-			hold_time, bsrp->rp_holdtime);
+		zlog_debug("%s : starting g2rp timer for grp: (%s:%u:%u)%pFX - rp: %pPAs with timeout  %d secs(Actual Hold time : %d secs)",
+			   __func__, PIM_DEBUG_VRF(bsrp->bsgrp_node->scope->pim->vrf),
+			   &bsrp->bsgrp_node->group, &bsrp->rp_address, hold_time,
+			   bsrp->rp_holdtime);
 
 	event_add_timer(router->master, pim_on_g2rp_timer, bsrp, hold_time,
 			&bsrp->g2rp_timer);
@@ -465,9 +461,9 @@ static void pim_g2rp_timer_stop(struct bsm_rpinfo *bsrp)
 		return;
 
 	if (PIM_DEBUG_BSM)
-		zlog_debug("%s : stopping g2rp timer for grp: %pFX - rp: %pPAs",
-			   __func__, &bsrp->bsgrp_node->group,
-			   &bsrp->rp_address);
+		zlog_debug("%s : stopping g2rp timer for grp: (%s:%u:%u)%pFX - rp: %pPAs",
+			   __func__, PIM_DEBUG_VRF(bsrp->bsgrp_node->scope->pim->vrf),
+			   &bsrp->bsgrp_node->group, &bsrp->rp_address);
 
 	event_cancel(&bsrp->g2rp_timer);
 }
@@ -492,7 +488,6 @@ static void pim_instate_pend_list(struct bsgrp_node *bsgrp_node)
 	struct route_node *rn;
 	struct pim_instance *pim;
 	struct rp_info *rp_all;
-	struct prefix group_all;
 	bool had_rp_node = true;
 
 	pim = bsgrp_node->scope->pim;
@@ -508,8 +503,7 @@ static void pim_instate_pend_list(struct bsgrp_node *bsgrp_node)
 
 	pend = bsm_rpinfos_first(bsgrp_node->partial_bsrp_list);
 
-	pim_get_all_mcast_group(&group_all);
-	rp_all = pim_rp_find_match_group(pim, &group_all);
+	rp_all = pim_rp_get_root(pim);
 	rn = route_node_lookup(pim->rp_table, &bsgrp_node->group);
 
 	if (pend)
@@ -524,19 +518,14 @@ static void pim_instate_pend_list(struct bsgrp_node *bsgrp_node)
 	     pim_rpf_addr_is_inaddr_any(&rp_all->rp))) {
 		if (PIM_DEBUG_BSM)
 			zlog_debug("%s: Route node doesn't exist", __func__);
+		if (rn)
+			route_unlock_node(rn);
 		if (pend)
 			pim_rp_new(pim, pend->rp_address, bsgrp_node->group,
 				   NULL, RP_SRC_BSR);
 		had_rp_node = false;
 	} else {
 		rp_info = (struct rp_info *)rn->info;
-		if (!rp_info) {
-			route_unlock_node(rn);
-			if (pend)
-				pim_rp_new(pim, pend->rp_address,
-					   bsgrp_node->group, NULL, RP_SRC_BSR);
-			had_rp_node = false;
-		}
 	}
 
 	/* We didn't have rp node and pending list is empty(unlikely), cleanup*/
@@ -714,7 +703,6 @@ void pim_bsm_clear(struct pim_instance *pim)
 	struct route_node *rpnode;
 	struct bsgrp_node *bsgrp;
 	pim_addr nht_p;
-	struct prefix g_all;
 	struct rp_info *rp_all;
 	struct pim_upstream *up;
 	struct rp_info *rp_info;
@@ -756,7 +744,8 @@ void pim_bsm_clear(struct pim_instance *pim)
 
 		rp_info = (struct rp_info *)rpnode->info;
 
-		if ((!rp_info) || (rp_info->rp_src != RP_SRC_BSR)) {
+		if (rp_info->rp_src != RP_SRC_BSR) {
+			route_unlock_node(rpnode);
 			pim_free_bsgrp_node(bsgrp->scope->bsrp_table,
 					    &bsgrp->group);
 			pim_free_bsgrp_data(bsgrp);
@@ -773,12 +762,13 @@ void pim_bsm_clear(struct pim_instance *pim)
 
 		pim_nht_delete_tracked(pim, nht_p, NULL, rp_info);
 
-		pim_get_all_mcast_group(&g_all);
-		rp_all = pim_rp_find_match_group(pim, &g_all);
+		rp_all = pim_rp_get_root(pim);
 
 		if (rp_all == rp_info) {
 			rp_all->rp.rpf_addr = PIMADDR_ANY;
 			rp_all->i_am_rp = 0;
+			pim_nht_rp_del(rp_all);
+			route_unlock_node(rpnode);
 		} else {
 			/* Delete the rp_info from rp-list */
 			listnode_delete(pim->rp_list, rp_info);
@@ -1323,8 +1313,9 @@ static bool pim_install_bsm_grp_rp(struct pim_instance *pim,
 
 	if (pim_bsm_scope_cannot_add_rp(scope, grpnode)) {
 		if (PIM_DEBUG_BSM)
-			zlog_debug("%s: dropping BSM RP entry for group %pFX (limit %u reached)",
-				   __func__, &grpnode->group, PIM_BSM_MAX_RP_ENTRIES);
+			zlog_debug("%s: dropping BSM RP entry for group (%s:%u:%u)%pFX (limit %u reached)",
+				   __func__, PIM_DEBUG_VRF(pim->vrf), &grpnode->group,
+				   PIM_BSM_MAX_RP_ENTRIES);
 		return false;
 	}
 
@@ -1476,8 +1467,9 @@ bool pim_bsm_parse_install_g2rp(struct bsm_scope *scope, uint8_t *buf,
 				size_t skip_rp;
 
 				if (PIM_DEBUG_BSM)
-					zlog_debug("%s: cannot create new group node %pFX, RP limit %u reached",
-						   __func__, &group, PIM_BSM_MAX_RP_ENTRIES);
+					zlog_debug("%s: cannot create new group node (%s:%u:%u)%pFX, RP limit %u reached",
+						   __func__, PIM_DEBUG_VRF(scope->pim->vrf),
+						   &group, PIM_BSM_MAX_RP_ENTRIES);
 				skip_rp = sizeof(struct bsmmsg_rpinfo) *
 					  (size_t)grpinfo.frag_rp_count;
 				if (offset > buflen || (size_t)(buflen - offset) < skip_rp)

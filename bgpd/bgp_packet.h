@@ -55,6 +55,7 @@ extern void bgp_notify_send(struct peer_connection *connection, uint8_t code,
 extern void bgp_notify_send_with_data(struct peer_connection *connection,
 				      uint8_t code, uint8_t sub_code,
 				      uint8_t *data, size_t datalen);
+extern void bgp_notify_send_fsm_error(struct peer_connection *connection, uint8_t type);
 void bgp_notify_io_invalid(struct peer_connection *connection, uint8_t code, uint8_t sub_code,
 			   uint8_t *data, size_t datalen);
 extern void bgp_route_refresh_send(struct peer_connection *connection, afi_t afi, safi_t safi,
@@ -74,6 +75,10 @@ extern int bgp_packet_set_marker(struct stream *s, uint8_t type);
 extern void bgp_packet_set_size(struct stream *s);
 
 extern void bgp_generate_updgrp_packets(struct event *event);
+#ifdef DEV_BUILD
+extern void bgp_updates_plug(struct bgp *bgp, struct peer *peer);
+extern void bgp_updates_unplug(struct bgp *bgp, struct peer *peer);
+#endif
 extern void bgp_process_packet(struct event *event);
 
 extern void bgp_send_delayed_eor(struct bgp *bgp);

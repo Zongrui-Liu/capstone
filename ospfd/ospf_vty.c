@@ -7142,6 +7142,20 @@ static const char *const link_data_desc_json[] = {
 	"networkMask", "routerInterfaceAddress",
 };
 
+/*
+ * Helper to index into various arrays, allowing direct index within bounds, but
+ * avoiding out-of-bounds access.
+ */
+static const char *get_desc_string(uint32_t idx, const char *const *array, size_t asize)
+{
+	const char *str = "unknown";
+
+	if (idx < asize)
+		str = array[idx];
+
+	return str;
+}
+
 /* Show router-LSA each Link information. */
 static void show_ip_ospf_database_router_links(struct vty *vty,
 					       struct router_lsa *rl,
@@ -7153,6 +7167,7 @@ static void show_ip_ospf_database_router_links(struct vty *vty,
 	json_object *json_link = NULL;
 	int metric = 0;
 	char buf[PREFIX_STRLEN];
+	const char *jstr;
 
 	if (json)
 		json_links = json_object_new_object();
@@ -7167,16 +7182,26 @@ static void show_ip_ospf_database_router_links(struct vty *vty,
 			snprintf(link, sizeof(link), "link%u", i);
 			json_link = json_object_new_object();
 			json_object_string_add(json_link, "linkType",
-					       link_type_desc[type]);
-			json_object_string_add(json_link,
-					       link_id_desc_json[type],
-					       inet_ntop(AF_INET,
-							 &rl->link[i].link_id,
+					       get_desc_string(type, link_type_desc,
+							       array_size(link_type_desc)));
+
+			if ((size_t)type < array_size(link_id_desc_json))
+				jstr = get_desc_string(type, link_id_desc_json,
+						       array_size(link_id_desc_json));
+			else
+				jstr = "linkId";
+			json_object_string_add(json_link, jstr,
+					       inet_ntop(AF_INET, &rl->link[i].link_id,
 							 buf, sizeof(buf)));
-			json_object_string_add(
-				json_link, link_data_desc_json[type],
-				inet_ntop(AF_INET, &rl->link[i].link_data,
-					  buf, sizeof(buf)));
+
+			if ((size_t)type < array_size(link_data_desc_json))
+				jstr = get_desc_string(type, link_data_desc_json,
+						       array_size(link_data_desc_json));
+			else
+				jstr = "linkData";
+			json_object_string_add(json_link, jstr,
+					       inet_ntop(AF_INET, &rl->link[i].link_data,
+							 buf, sizeof(buf)));
 			json_object_int_add(json_link, "numOfTosMetrics",
 					    metric);
 			json_object_int_add(json_link, "tos0Metric",
@@ -7184,12 +7209,15 @@ static void show_ip_ospf_database_router_links(struct vty *vty,
 			json_object_object_add(json_links, link, json_link);
 		} else {
 			vty_out(vty, "    Link connected to: %s\n",
-				link_type_desc[type]);
+				get_desc_string(type, link_type_desc,
+						array_size(link_type_desc)));
 			vty_out(vty, "     (Link ID) %s: %pI4\n",
-				link_id_desc[type],
+				get_desc_string(type, link_id_desc,
+						array_size(link_id_desc)),
 				&rl->link[i].link_id);
 			vty_out(vty, "     (Link Data) %s: %pI4\n",
-				link_data_desc[type],
+				get_desc_string(type, link_data_desc,
+						array_size(link_data_desc)),
 				&rl->link[i].link_data);
 			vty_out(vty, "      Number of TOS metrics: 0\n");
 			vty_out(vty, "       TOS 0 Metric: %d\n",
@@ -7530,7 +7558,8 @@ static void show_lsa_detail(struct vty *vty, struct ospf *ospf, int type,
 	case OSPF_OPAQUE_AS_LSA:
 		if (!json)
 			vty_out(vty, "                %s \n\n",
-				show_database_desc[type]);
+				get_desc_string(type, show_database_desc,
+						array_size(show_database_desc)));
 		else
 			json_lsa_array = json_object_new_array();
 
@@ -7538,7 +7567,8 @@ static void show_lsa_detail(struct vty *vty, struct ospf *ospf, int type,
 				     json_lsa_array);
 		if (json)
 			json_object_object_add(json,
-					       show_database_desc_json[type],
+					       get_desc_string(type, show_database_desc_json,
+							       array_size(show_database_desc_json)),
 					       json_lsa_array);
 
 		break;
@@ -7548,9 +7578,9 @@ static void show_lsa_detail(struct vty *vty, struct ospf *ospf, int type,
 
 		for (ALL_LIST_ELEMENTS_RO(ospf->areas, node, area)) {
 			if (!json) {
-				vty_out(vty,
-					"\n                %s (Area %s)\n\n",
-					show_database_desc[type],
+				vty_out(vty, "\n                %s (Area %s)\n\n",
+					get_desc_string(type, show_database_desc,
+							array_size(show_database_desc)),
 					ospf_area_desc_string(area));
 			} else {
 				json_lsa_array = json_object_new_array();
@@ -7571,7 +7601,8 @@ static void show_lsa_detail(struct vty *vty, struct ospf *ospf, int type,
 			json_object_object_add(json_lsa_type, "areas",
 					       json_areas);
 			json_object_object_add(json,
-					       show_database_desc_json[type],
+					       get_desc_string(type, show_database_desc_json,
+							       array_size(show_database_desc_json)),
 					       json_lsa_type);
 		}
 		break;
@@ -7639,9 +7670,9 @@ static void show_lsa_detail_adv_router(struct vty *vty, struct ospf *ospf,
 
 		for (ALL_LIST_ELEMENTS_RO(ospf->areas, node, area)) {
 			if (!json) {
-				vty_out(vty,
-					"\n                %s (Area %s)\n\n",
-					show_database_desc[type],
+				vty_out(vty, "\n                %s (Area %s)\n\n",
+					get_desc_string(type, show_database_desc,
+							array_size(show_database_desc)),
 					ospf_area_desc_string(area));
 			} else {
 				json_lsa_array = json_object_new_array();
@@ -7662,7 +7693,9 @@ static void show_lsa_detail_adv_router(struct vty *vty, struct ospf *ospf,
 			json_object_object_add(json_lsa_type, "areas",
 					       json_areas);
 			json_object_object_add(json,
-					       show_database_desc_json[type],
+					       get_desc_string(type,
+							       show_database_desc_json,
+							       array_size(show_database_desc_json)),
 					       json_lsa_type);
 		}
 		break;
@@ -7738,9 +7771,7 @@ void show_ip_ospf_database_summary(struct vty *vty, struct ospf *ospf, int self,
 				else
 					json_object_int_add(
 						json_area,
-
-						show_database_desc_count_json
-							[type],
+						show_database_desc_count_json[type],
 						count);
 			}
 		}
@@ -9361,6 +9392,30 @@ DEFUN_HIDDEN (no_ospf_priority,
 	return no_ip_ospf_priority(self, vty, argc, argv);
 }
 
+/* Refresh each logical interface using its effective per-address parameters. */
+static void ospf_if_retransmit_timer_update(struct interface *ifp)
+{
+	struct route_node *rn, *nn;
+	struct ospf_interface *oi;
+	struct ospf_neighbor *nbr;
+
+	for (rn = route_top(IF_OIFS(ifp)); rn; rn = route_next(rn)) {
+		oi = rn->info;
+		if (!oi)
+			continue;
+
+		for (nn = route_top(oi->nbrs); nn; nn = route_next(nn)) {
+			nbr = nn->info;
+			if (!nbr)
+				continue;
+
+			nbr->v_db_desc = OSPF_IF_PARAM(oi, retransmit_interval);
+			nbr->v_ls_req = OSPF_IF_PARAM(oi, retransmit_interval);
+			nbr->v_ls_rxmt = OSPF_IF_PARAM(oi, retransmit_interval);
+		}
+	}
+}
+
 DEFUN (ip_ospf_retransmit_interval,
        ip_ospf_retransmit_interval_addr_cmd,
        "ip ospf retransmit-interval (1-65535) [A.B.C.D]",
@@ -9393,6 +9448,8 @@ DEFUN (ip_ospf_retransmit_interval,
 
 	SET_IF_PARAM(params, retransmit_interval);
 	params->retransmit_interval = seconds;
+
+	ospf_if_retransmit_timer_update(ifp);
 
 	return CMD_SUCCESS;
 }
@@ -9444,6 +9501,8 @@ DEFUN (no_ip_ospf_retransmit_interval,
 		ospf_free_if_params(ifp, addr);
 		ospf_if_update_params(ifp, addr);
 	}
+
+	ospf_if_retransmit_timer_update(ifp);
 
 	return CMD_SUCCESS;
 }

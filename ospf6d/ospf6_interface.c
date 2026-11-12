@@ -321,6 +321,7 @@ void ospf6_interface_delete(struct ospf6_interface *oi)
 
 	if (oi->at_data.auth_key)
 		XFREE(MTYPE_OSPF6_AUTH_MANUAL_KEY, oi->at_data.auth_key);
+	XFREE(MTYPE_OSPF6_AUTH_KEYCHAIN, oi->at_data.keychain);
 
 	/* Free BFD allocated data. */
 	XFREE(MTYPE_TMP, oi->bfd_config.profile);
@@ -483,10 +484,9 @@ void ospf6_interface_connected_route_update(struct interface *ifp)
 			ret = prefix_list_apply(plist, (void *)c->address);
 			if (ret == PREFIX_DENY) {
 				if (IS_OSPF6_DEBUG_INTERFACE)
-					zlog_debug("%pFX on %s filtered by prefix-list %s ",
-						   c->address,
-						   oi->interface->name,
-						   oi->plist_name);
+					zlog_debug("(%s:%u:%u)%pFX on %s filtered by prefix-list %s ",
+						   OSPF6_DEBUG_VRF(oi->area->ospf6), c->address,
+						   oi->interface->name, oi->plist_name);
 				continue;
 			}
 		}
@@ -2007,7 +2007,7 @@ DEFUN (ipv6_ospf6_ifmtu,
 	/* re-establish adjacencies */
 	for (ALL_LIST_ELEMENTS(oi->neighbor_list, node, nnode, on)) {
 		event_cancel(&on->inactivity_timer);
-		event_add_event(master, inactivity_timer, on, 0, NULL);
+		event_add_event(master, inactivity_timer, on, 0, &on->inactivity_event);
 	}
 
 	return CMD_SUCCESS;
@@ -2053,7 +2053,7 @@ DEFUN (no_ipv6_ospf6_ifmtu,
 	/* re-establish adjacencies */
 	for (ALL_LIST_ELEMENTS(oi->neighbor_list, node, nnode, on)) {
 		event_cancel(&on->inactivity_timer);
-		event_add_event(master, inactivity_timer, on, 0, NULL);
+		event_add_event(master, inactivity_timer, on, 0, &on->inactivity_event);
 	}
 
 	return CMD_SUCCESS;
@@ -2502,7 +2502,7 @@ DEFUN (ipv6_ospf6_passive,
 
 	for (ALL_LIST_ELEMENTS(oi->neighbor_list, node, nnode, on)) {
 		event_cancel(&on->inactivity_timer);
-		event_add_event(master, inactivity_timer, on, 0, NULL);
+		event_add_event(master, inactivity_timer, on, 0, &on->inactivity_event);
 	}
 
 	return CMD_SUCCESS;

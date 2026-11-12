@@ -43,6 +43,8 @@
 #include "bgpd/bgp_open.h"
 #include "bgpd/bgp_aspath.h"
 
+extern struct zebra_privs_t bgpd_privs;
+
 static void bmp_close(struct bmp *bmp);
 static struct bmp_bgp *bmp_bgp_find(struct bgp *bgp);
 static void bmp_targets_put(struct bmp_targets *bt);
@@ -67,6 +69,7 @@ DEFINE_MTYPE_STATIC(BMP, BMP_TARGETSNAME, "BMP targets name");
 DEFINE_MTYPE_STATIC(BMP, BMP_LISTENER,	"BMP listener");
 DEFINE_MTYPE_STATIC(BMP, BMP_ACTIVE,	"BMP active connection config");
 DEFINE_MTYPE_STATIC(BMP, BMP_ACLNAME,	"BMP access-list name");
+DEFINE_MTYPE_STATIC(BMP, BMP_INITIATION, "BMP initiation information");
 DEFINE_MTYPE_STATIC(BMP, BMP_QUEUE,	"BMP update queue item");
 DEFINE_MTYPE_STATIC(BMP, BMP,		"BMP instance state");
 DEFINE_MTYPE_STATIC(BMP, BMP_MIRRORQ,	"BMP route mirroring buffer");
@@ -388,10 +391,19 @@ static void bmp_per_peer_hdr(struct stream *s, struct bgp *bgp,
 	}
 }
 
+#define BMP_INIT_INFO_TYPE_SYSDESCR 1
+#define BMP_INIT_INFO_TYPE_SYSNAME  2
+/* RFC 1213: sysDescr and sysName are DisplayString (SIZE (0..255)) */
+#define BMP_INIT_INFO_SYS_MAX_LEN 255
+
 static void bmp_put_info_tlv(struct stream *s, uint16_t type,
 		const char *string)
 {
 	int len = strlen (string);
+
+	if ((type == BMP_INIT_INFO_TYPE_SYSDESCR || type == BMP_INIT_INFO_TYPE_SYSNAME) &&
+	    len > BMP_INIT_INFO_SYS_MAX_LEN)
+		len = BMP_INIT_INFO_SYS_MAX_LEN;
 	stream_putw(s, type);
 	stream_putw(s, len);
 	stream_put(s, string, len);
@@ -418,16 +430,16 @@ static void bmp_put_vrftablename_info_tlv(struct stream *s, struct peer *peer)
 
 static int bmp_send_initiation(struct bmp *bmp)
 {
+	struct bmp_targets *bt = bmp->targets;
 	int len;
 	struct stream *s = stream_new(BGP_MAX_PACKET_SIZE);
 
 	bmp_common_hdr(s, BMP_VERSION_3, BMP_TYPE_INITIATION);
 
-#define BMP_INIT_INFO_TYPE_SYSDESCR 1
-#define BMP_INIT_INFO_TYPE_SYSNAME  2
 	bmp_put_info_tlv(s, BMP_INIT_INFO_TYPE_SYSDESCR,
-			 FRR_FULL_NAME " " FRR_VER_SHORT);
-	bmp_put_info_tlv(s, BMP_INIT_INFO_TYPE_SYSNAME, cmd_hostname_get());
+			 bt->sysdescr ? bt->sysdescr : FRR_FULL_NAME " " FRR_VER_SHORT);
+	bmp_put_info_tlv(s, BMP_INIT_INFO_TYPE_SYSNAME,
+			 bt->sysname ? bt->sysname : cmd_hostname_get());
 
 	len = stream_get_endp(s);
 	stream_putl_at(s, BMP_LENGTH_POS, len); /* message length is set. */
@@ -1251,12 +1263,40 @@ static int bmp_peer_backward(struct peer *peer)
 	return 0;
 }
 
+/* write one EoR route monitoring message (pre-built update in s) for peer */
+static void bmp_eor_write(struct bmp *bmp, struct stream *s, struct peer *peer, afi_t afi,
+			  uint8_t flags, uint8_t peer_type_flag)
+{
+	struct bgp *bgp = peer->bgp;
+	struct stream *s2;
+	uint64_t peer_distinguisher = 0;
+
+	/* skip this message if peer distinguisher is not available */
+	if (bmp_get_peer_distinguisher(bgp, afi, peer_type_flag, &peer_distinguisher)) {
+		zlog_warn("skipping bmp message for reason: can't get peer distinguisher");
+		return;
+	}
+
+	s2 = stream_new(BGP_MAX_PACKET_SIZE);
+
+	bmp_common_hdr(s2, BMP_VERSION_3, BMP_TYPE_ROUTE_MONITORING);
+
+	bmp_per_peer_hdr(s2, bgp, peer, flags, peer_type_flag, peer_distinguisher, NULL);
+
+	stream_putl_at(s2, BMP_LENGTH_POS, stream_get_endp(s) + stream_get_endp(s2));
+
+	bmp->cnt_update++;
+	pullwr_write_stream(bmp->pullwr, s2);
+	pullwr_write_stream(bmp->pullwr, s);
+	stream_free(s2);
+}
+
 static void bmp_eor(struct bmp *bmp, afi_t afi, safi_t safi, uint8_t flags, uint8_t peer_type_flag,
 		    struct bgp *bgp)
 {
 	struct peer *peer;
 	struct listnode *node;
-	struct stream *s, *s2;
+	struct stream *s;
 	iana_afi_t pkt_afi = IANA_AFI_IPV4;
 	iana_safi_t pkt_safi = IANA_SAFI_UNICAST;
 
@@ -1288,32 +1328,18 @@ static void bmp_eor(struct bmp *bmp, afi_t afi, safi_t safi, uint8_t flags, uint
 
 	bgp_packet_set_size(s);
 
+	/* Loc-RIB is a single instance: one EoR, not one per negotiated peer */
+	if (peer_type_flag == BMP_PEER_TYPE_LOC_RIB_INSTANCE) {
+		bmp_eor_write(bmp, s, bgp->peer_self, afi, flags, peer_type_flag);
+		stream_free(s);
+		return;
+	}
+
 	for (ALL_LIST_ELEMENTS_RO(bgp->peer, node, peer)) {
 		if (!peer->afc_nego[afi][safi])
 			continue;
 
-		uint64_t peer_distinguisher = 0;
-		/* skip this message if peer distinguisher is not available */
-		if (bmp_get_peer_distinguisher(peer->bgp, afi, peer_type_flag, &peer_distinguisher)) {
-			zlog_warn(
-				"skipping bmp message for reason: can't get peer distinguisher");
-			continue;
-		}
-
-		s2 = stream_new(BGP_MAX_PACKET_SIZE);
-
-		bmp_common_hdr(s2, BMP_VERSION_3,
-				BMP_TYPE_ROUTE_MONITORING);
-
-		bmp_per_peer_hdr(s2, bgp, peer, flags, peer_type_flag, peer_distinguisher, NULL);
-
-		stream_putl_at(s2, BMP_LENGTH_POS,
-				stream_get_endp(s) + stream_get_endp(s2));
-
-		bmp->cnt_update++;
-		pullwr_write_stream(bmp->pullwr, s2);
-		pullwr_write_stream(bmp->pullwr, s);
-		stream_free(s2);
+		bmp_eor_write(bmp, s, peer, afi, flags, peer_type_flag);
 	}
 	stream_free(s);
 }
@@ -1357,8 +1383,13 @@ static struct stream *bmp_update(const struct prefix *p, struct prefix_rd *prd,
 	total_attr_len = bgp_packet_attribute(NULL, peer, s, attr, &vecarr, NULL, afi, safi, peer,
 					      NULL, NULL, 0, 0, 0, 0, NULL, NULL, true);
 
-	/* peer_cap_enhe & add-path removed */
-	if (afi == AFI_IP && safi == SAFI_UNICAST)
+	/*
+	 * With extended next-hop negotiated (RFC 8950), bgp_packet_attribute()
+	 * leaves out the legacy NEXT_HOP attribute, so IPv4 unicast must be
+	 * encoded in MP_REACH_NLRI with its IPv6 next hop, as
+	 * subgroup_update_packet() does. Add-path is not handled here.
+	 */
+	if (afi == AFI_IP && safi == SAFI_UNICAST && !peer_cap_enhe(peer, afi, safi))
 		stream_put_prefix(s, p);
 	else {
 		size_t p1 = stream_get_endp(s);
@@ -1893,11 +1924,6 @@ static bool bmp_wrqueue_locrib(struct bmp *bmp, struct pullwr *pullwr)
 		 */
 		goto out;
 	}
-	if (peer != peer->bgp->peer_self && !peer_established(peer->connection)) {
-		/* peer is neither self, nor established
-		 */
-		goto out;
-	}
 
 	bool is_vpn = (bqe->afi == AFI_L2VPN && bqe->safi == SAFI_EVPN) ||
 		      (bqe->safi == SAFI_MPLS_VPN);
@@ -1909,20 +1935,16 @@ static bool bmp_wrqueue_locrib(struct bmp *bmp, struct pullwr *pullwr)
 	struct bgp_path_info *bpi;
 
 	for (bpi = bgp_dest_get_bgp_path_info(bn); bpi; bpi = bpi->next) {
-		if (!CHECK_FLAG(bpi->flags, BGP_PATH_SELECTED))
-			continue;
-		if (bpi->peer == peer)
+		if (CHECK_FLAG(bpi->flags, BGP_PATH_SELECTED))
 			break;
 	}
 
 	bpi_num_labels = BGP_PATH_INFO_NUM_LABELS(bpi);
 
-	bmp_monitor(bmp, peer, 0, BMP_PEER_TYPE_LOC_RIB_INSTANCE, &bqe->p, prd,
+	bmp_monitor(bmp, bpi ? bpi->peer : peer, 0, BMP_PEER_TYPE_LOC_RIB_INSTANCE, &bqe->p, prd,
 		    bpi ? bpi->attr : NULL, bpi, afi, safi,
-		    bpi && bpi->extra ? bpi->extra->bgp_rib_uptime
-				      : (time_t)(-1L),
-		    bpi_num_labels ? bpi->extra->labels->label : NULL,
-		    bpi_num_labels);
+		    bpi && bpi->extra ? bpi->extra->bgp_rib_uptime : (time_t)(-1L),
+		    bpi_num_labels ? bpi->extra->labels->label : NULL, bpi_num_labels);
 	written = true;
 
 out:
@@ -2764,6 +2786,8 @@ static void bmp_targets_put(struct bmp_targets *bt)
 
 	XFREE(MTYPE_BMP_ACLNAME, bt->acl_name);
 	XFREE(MTYPE_BMP_ACLNAME, bt->acl6_name);
+	XFREE(MTYPE_BMP_INITIATION, bt->sysdescr);
+	XFREE(MTYPE_BMP_INITIATION, bt->sysname);
 	bmp_session_fini(&bt->sessions);
 
 	XFREE(MTYPE_BMP_TARGETSNAME, bt->name);
@@ -3087,8 +3111,11 @@ static void bmp_active_thread(struct event *t)
 			vrf_id = VRF_DEFAULT;
 		else
 			vrf_id = ba->targets->bgp->vrf_id;
-		resolver_resolve(&ba->resq, AF_UNSPEC, vrf_id, ba->hostname,
-				 bmp_active_resolved);
+		/* The resolver needs privileges to enter and leave a VRF netns. */
+		frr_with_privs(&bgpd_privs) {
+			resolver_resolve(&ba->resq, AF_UNSPEC, vrf_id,
+					 ba->hostname, bmp_active_resolved);
+		}
 		return;
 	}
 
@@ -3416,6 +3443,69 @@ DEFPY(bmp_acl,
 
 	return CMD_SUCCESS;
 }
+
+DEFPY(bmp_initiation_cfg,
+      bmp_initiation_cmd,
+      "bmp initiation <sysDescr|sysName>$info LINE...",
+      BMP_STR
+      "BMP Initiation message\n"
+      "System description, by default the FRR version\n"
+      "System name, by default the hostname\n"
+      "String to send\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
+	char **what;
+	int idx = 0;
+	char *str;
+
+	if (!strcmp(info, "sysDescr"))
+		what = &bt->sysdescr;
+	else
+		what = &bt->sysname;
+
+	argv_find(argv, argc, "LINE", &idx);
+	str = argv_concat(argv, argc, idx);
+	if (strlen(str) > BMP_INIT_INFO_SYS_MAX_LEN) {
+		vty_out(vty, "%% %s length should be at most %d chars\n", info,
+			BMP_INIT_INFO_SYS_MAX_LEN);
+		XFREE(MTYPE_TMP, str);
+		return CMD_WARNING_CONFIG_FAILED;
+	}
+	XFREE(MTYPE_BMP_INITIATION, *what);
+	*what = XSTRDUP(MTYPE_BMP_INITIATION, str);
+	XFREE(MTYPE_TMP, str);
+
+	return CMD_SUCCESS;
+}
+
+DEFPY(no_bmp_initiation_cfg,
+      no_bmp_initiation_cmd,
+      "no bmp initiation <sysDescr|sysName>$info",
+      NO_STR
+      BMP_STR
+      "BMP Initiation message\n"
+      "System description, by default the FRR version\n"
+      "System name, by default the hostname\n")
+{
+	VTY_DECLVAR_CONTEXT_SUB(bmp_targets, bt);
+
+	if (!strcmp(info, "sysDescr"))
+		XFREE(MTYPE_BMP_INITIATION, bt->sysdescr);
+	else
+		XFREE(MTYPE_BMP_INITIATION, bt->sysname);
+
+	return CMD_SUCCESS;
+}
+
+ALIAS(no_bmp_initiation_cfg,
+      no_bmp_initiation_line_cmd,
+      "no bmp initiation <sysDescr|sysName>$info LINE...",
+      NO_STR
+      BMP_STR
+      "BMP Initiation message\n"
+      "System description, by default the FRR version\n"
+      "System name, by default the hostname\n"
+      "String to send\n")
 
 DEFPY(bmp_stats_cfg,
       bmp_stats_cmd,
@@ -3749,6 +3839,10 @@ static int bmp_config_write(struct bgp *bgp, struct vty *vty)
 			vty_out(vty, "  ipv6 access-list %s\n", bt->acl6_name);
 		if (bt->acl_name)
 			vty_out(vty, "  ip access-list %s\n", bt->acl_name);
+		if (bt->sysdescr)
+			vty_out(vty, "  bmp initiation sysDescr %s\n", bt->sysdescr);
+		if (bt->sysname)
+			vty_out(vty, "  bmp initiation sysName %s\n", bt->sysname);
 
 		if (!bt->stats_send_experimental)
 			vty_out(vty, "  no bmp stats send-experimental\n");
@@ -3812,6 +3906,9 @@ static int bgp_bmp_init(struct event_loop *tm)
 	install_element(BMP_NODE, &no_bmp_listener_cmd);
 	install_element(BMP_NODE, &bmp_connect_cmd);
 	install_element(BMP_NODE, &bmp_acl_cmd);
+	install_element(BMP_NODE, &bmp_initiation_cmd);
+	install_element(BMP_NODE, &no_bmp_initiation_cmd);
+	install_element(BMP_NODE, &no_bmp_initiation_line_cmd);
 	install_element(BMP_NODE, &bmp_stats_send_experimental_cmd);
 	install_element(BMP_NODE, &bmp_stats_cmd);
 	install_element(BMP_NODE, &bmp_monitor_cmd);
@@ -3868,7 +3965,11 @@ static int bmp_route_update_bgpbmp(struct bmp_targets *bt, afi_t afi, safi_t saf
 {
 	bool is_withdraw = old_route && !new_route;
 	struct bgp_path_info *updated_route = is_withdraw ? old_route : new_route;
-	struct peer *peer = updated_route->peer;
+	/* The Loc-RIB holds one path per prefix, so its queue items are keyed
+	 * by the instance and not by a peer that can go down or be deleted
+	 * before the queue is written.
+	 */
+	struct peer *peer = updated_route->peer->bgp->peer_self;
 	struct bmp *bmp;
 	struct bmp_queue_entry *last_item;
 

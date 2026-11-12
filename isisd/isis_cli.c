@@ -49,8 +49,13 @@ DEFPY_YANG_NOSH(router_isis, router_isis_cmd,
 	nb_cli_enqueue_change(vty, ".", NB_OP_CREATE, NULL);
 
 	ret = nb_cli_apply_changes(vty, "%s", base_xpath);
-	if (ret == CMD_SUCCESS)
+	if (ret == CMD_SUCCESS) {
 		VTY_PUSH_XPATH(ISIS_NODE, base_xpath);
+		/* lib/zclient.h: zapi_rlfa_igp.isis.area_tag is 32 bytes, including NUL. */
+		if (strlen(tag) > 31)
+			vty_out(vty,
+				"Warning: IS-IS area tags longer than 31 bytes are truncated in remote LFA messages and may prevent remote LFA from working.\n");
+	}
 
 	return ret;
 }
@@ -105,6 +110,45 @@ void cli_show_router_isis_end(struct vty *vty, const struct lyd_node *dnode)
 static const struct lyd_node *isis_iface_cfg_dnode(struct vty *vty)
 {
 	return yang_dnode_getf(vty->candidate_config->dnode, "%s/frr-isisd:isis", VTY_CURR_XPATH);
+}
+
+/* Say that the CSNP interval is unused on p2p while periodic CSNPs are off. */
+static void isis_warn_csnp_interval_unused(struct vty *vty, bool disabled, bool interval_set)
+{
+	if (disabled && interval_set)
+		vty_out(vty,
+			"%% isis csnp-interval is not used on point-to-point circuits while periodic CSNPs are disabled\n");
+}
+
+/*
+ * Would this interface make a broadcast circuit by default? From its flags,
+ * as isis_circuit_if_add() decides: the circuit may not exist yet. Callers
+ * check the configured network type.
+ */
+static bool isis_iface_broadcast_capable(struct vty *vty)
+{
+	struct interface *ifp = VTY_GET_CONTEXT(interface);
+
+	if (!ifp || if_is_loopback(ifp))
+		return false;
+	if (isis_option_check(ISIS_OPT_DUMMY_AS_LOOPBACK) &&
+	    CHECK_FLAG(ifp->status, ZEBRA_INTERFACE_DUMMY))
+		return false;
+	return !if_is_pointopoint(ifp);
+}
+
+/* Is this interface a broadcast circuit, given its configured network type? */
+static bool isis_iface_broadcast(struct vty *vty, const struct lyd_node *dnode)
+{
+	return isis_iface_broadcast_capable(vty) &&
+	       yang_dnode_get_enum(dnode, "network-type") != CIRCUIT_T_P2P;
+}
+
+/* Say that periodic CSNPs cannot be disabled on a broadcast circuit. */
+static void isis_warn_periodic_csnp_broadcast(struct vty *vty)
+{
+	vty_out(vty,
+		"%% periodic CSNPs cannot be disabled on broadcast circuits; no isis periodic-csnp only applies to point-to-point\n");
 }
 
 /*
@@ -433,6 +477,29 @@ void cli_show_advertise_high_metrics(struct vty *vty, const struct lyd_node *dno
 		vty_out(vty, " advertise-high-metrics\n");
 	else if (show_defaults)
 		vty_out(vty, " no advertise-high-metrics\n");
+}
+
+/*
+ * XPath: /frr-isisd:isis/instance/leak
+ */
+DEFPY_YANG(isis_leak, isis_leak_cmd,
+	   "[no] leak level-1 into level-2",
+	   NO_STR
+	   "Advertise the prefixes of a level in the LSP of another level\n"
+	   "Prefixes of level-1\n"
+	   "Into\n"
+	   "LSP of level-2\n")
+{
+	nb_cli_enqueue_change(vty, "./leak[level-from='level-1'][level-to='level-2']",
+			      no ? NB_OP_DESTROY : NB_OP_CREATE, NULL);
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+void cli_show_isis_leak(struct vty *vty, const struct lyd_node *dnode, bool show_defaults)
+{
+	vty_out(vty, " leak %s into %s\n", yang_dnode_get_string(dnode, "level-from"),
+		yang_dnode_get_string(dnode, "level-to"));
 }
 
 /*
@@ -2557,6 +2624,72 @@ void cli_show_ip_isis_threeway_shake(struct vty *vty, const struct lyd_node *dno
 }
 
 /*
+ * XPath:
+ * /frr-interface:lib/interface/frr-isisd:isis/disable-p2p-periodic-csnp
+ */
+DEFPY_YANG(isis_periodic_csnp, isis_periodic_csnp_cmd, "[no] isis periodic-csnp",
+	   NO_STR
+	   "IS-IS commands\n"
+	   "Enable/Disable periodic CSNPs on point-to-point circuits\n")
+{
+	const struct lyd_node *dnode = isis_iface_cfg_dnode(vty);
+	bool interval_set;
+
+	if (!dnode) {
+		vty_out(vty, "ISIS is not enabled on this circuit\n");
+		return CMD_SUCCESS;
+	}
+
+	interval_set = !yang_dnode_is_default(dnode, "csnp-interval/level-1") ||
+		       !yang_dnode_is_default(dnode, "csnp-interval/level-2");
+	if (no && isis_iface_broadcast(vty, dnode))
+		isis_warn_periodic_csnp_broadcast(vty);
+	else
+		isis_warn_csnp_interval_unused(vty, !!no, interval_set);
+
+	nb_cli_enqueue_change(vty, "./frr-isisd:isis/disable-p2p-periodic-csnp", NB_OP_MODIFY,
+			      no ? "true" : "false");
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+void cli_show_ip_isis_periodic_csnp(struct vty *vty, const struct lyd_node *dnode,
+				    bool show_defaults)
+{
+	if (yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " no");
+	vty_out(vty, " isis periodic-csnp\n");
+}
+
+/*
+ * XPath: /frr-interface:lib/interface/frr-isisd:isis/ipv4-over-ipv6-nexthop
+ */
+DEFPY_YANG(isis_ipv4_over_ipv6_nexthop, isis_ipv4_over_ipv6_nexthop_cmd,
+	   "[no] isis ipv4-over-ipv6-nexthop",
+	   NO_STR
+	   "IS-IS commands\n"
+	   "Route IPv4 over this interface using IPv6 link-local nexthops when it has no IPv4\n")
+{
+	if (!isis_iface_cfg_dnode(vty)) {
+		vty_out(vty, "ISIS is not enabled on this circuit\n");
+		return CMD_SUCCESS;
+	}
+
+	nb_cli_enqueue_change(vty, "./frr-isisd:isis/ipv4-over-ipv6-nexthop", NB_OP_MODIFY,
+			      no ? "false" : "true");
+
+	return nb_cli_apply_changes(vty, NULL);
+}
+
+void cli_show_ip_isis_ipv4_over_ipv6_nexthop(struct vty *vty, const struct lyd_node *dnode,
+					     bool show_defaults)
+{
+	if (!yang_dnode_get_bool(dnode, NULL))
+		vty_out(vty, " no");
+	vty_out(vty, " isis ipv4-over-ipv6-nexthop\n");
+}
+
+/*
  * XPath: /frr-interface:lib/interface/frr-isisd:isis/hello/padding
  */
 DEFPY_YANG(isis_hello_padding, isis_hello_padding_cmd,
@@ -2606,6 +2739,15 @@ DEFPY_YANG(csnp_interval, csnp_interval_cmd,
       "Specify interval for level-1 CSNPs\n"
       "Specify interval for level-2 CSNPs\n")
 {
+	const struct lyd_node *dnode = isis_iface_cfg_dnode(vty);
+	bool disabled;
+
+	/* On a broadcast circuit the DIS uses the interval: nothing to warn. */
+	if (dnode && !isis_iface_broadcast(vty, dnode)) {
+		disabled = yang_dnode_get_bool(dnode, "disable-p2p-periodic-csnp");
+		isis_warn_csnp_interval_unused(vty, disabled, intv != DEFAULT_CSNP_INTERVAL);
+	}
+
 	if (!level || strmatch(level, "level-1"))
 		nb_cli_enqueue_change(vty, "./frr-isisd:isis/csnp-interval/level-1", NB_OP_MODIFY,
 				      intv_str);
@@ -2869,9 +3011,14 @@ DEFPY_YANG(isis_network, isis_network_cmd, "[no] isis network point-to-point",
       "Set network type\n"
       "point-to-point network type\n")
 {
-	if (no)
+	const struct lyd_node *dnode = isis_iface_cfg_dnode(vty);
+
+	if (no) {
+		if (dnode && yang_dnode_get_bool(dnode, "disable-p2p-periodic-csnp") &&
+		    isis_iface_broadcast_capable(vty))
+			isis_warn_periodic_csnp_broadcast(vty);
 		nb_cli_enqueue_change(vty, "./frr-isisd:isis/network-type", NB_OP_DESTROY, NULL);
-	else
+	} else
 		nb_cli_enqueue_change(vty, "./frr-isisd:isis/network-type", NB_OP_MODIFY,
 				      "point-to-point");
 
@@ -3672,6 +3819,7 @@ void isis_cli_init(void)
 	install_element(ISIS_NODE, &no_metric_style_cmd);
 
 	install_element(ISIS_NODE, &advertise_high_metrics_cmd);
+	install_element(ISIS_NODE, &isis_leak_cmd);
 
 	install_element(ISIS_NODE, &area_passwd_cmd);
 	install_element(ISIS_NODE, &domain_passwd_cmd);
@@ -3761,6 +3909,8 @@ void isis_cli_init(void)
 	install_element(INTERFACE_NODE, &no_isis_hello_multiplier_cmd);
 
 	install_element(INTERFACE_NODE, &isis_threeway_adj_cmd);
+	install_element(INTERFACE_NODE, &isis_periodic_csnp_cmd);
+	install_element(INTERFACE_NODE, &isis_ipv4_over_ipv6_nexthop_cmd);
 
 	install_element(INTERFACE_NODE, &isis_hello_padding_cmd);
 

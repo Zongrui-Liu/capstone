@@ -948,6 +948,10 @@ void zebra_srv6_locator_add(struct srv6_locator *locator)
 	 * not degrade the overall performance of FRRouting.
 	 */
 	frr_each (zserv_client_list, &zrouter.client_list, client) {
+		/* Do not send unsolicited messages to synchronous clients. */
+		if (client->synchronous)
+			continue;
+
 		zsend_zebra_srv6_locator_add(client, locator);
 	}
 }
@@ -969,6 +973,10 @@ void zebra_srv6_locator_delete(struct srv6_locator *locator)
 	 * owner of each chunk.
 	 */
 	frr_each (zserv_client_list, &zrouter.client_list, client) {
+		/* Do not send unsolicited messages to synchronous clients. */
+		if (client->synchronous)
+			continue;
+
 		zsend_zebra_srv6_locator_delete(client, locator);
 	}
 
@@ -1009,6 +1017,10 @@ void zebra_notify_srv6_locator_add(struct srv6_locator *locator)
 	 * not degrade the overall performance of FRRouting.
 	 */
 	frr_each (zserv_client_list, &zrouter.client_list, client) {
+		/* Do not send unsolicited messages to synchronous clients. */
+		if (client->synchronous)
+			continue;
+
 		zsend_zebra_srv6_locator_add(client, locator);
 	}
 }
@@ -1029,6 +1041,10 @@ void zebra_notify_srv6_locator_delete(struct srv6_locator *locator)
 	 * owner of each chunk.
 	 */
 	frr_each (zserv_client_list, &zrouter.client_list, client) {
+		/* Do not send unsolicited messages to synchronous clients. */
+		if (client->synchronous)
+			continue;
+
 		zsend_zebra_srv6_locator_delete(client, locator);
 	}
 }
@@ -1530,7 +1546,11 @@ static bool alloc_srv6_sid_func_explicit(struct zebra_srv6_sid_block *block,
 			uint32_t elib_end = format->config.usid.elib_end;
 			uint32_t wlib_start = format->config.usid.wlib_start;
 			uint32_t wlib_end = format->config.usid.wlib_end;
-			uint32_t ewlib_start = format->config.usid.ewlib_start;
+			/*
+			 * The Wide LIB is indexed relative to wlib_start, so the EWLIB
+			 * range must not start below it
+			 */
+			uint32_t ewlib_start = MAX(format->config.usid.ewlib_start, wlib_start);
 			uint32_t ewlib_end = wlib_end;
 			uint32_t *sid_wide_func_ptr = NULL;
 
@@ -2187,7 +2207,11 @@ static bool release_srv6_sid_func_explicit(struct zebra_srv6_sid_block *block,
 			uint32_t elib_start = format->config.usid.elib_start;
 			uint32_t elib_end = format->config.usid.elib_end;
 			uint32_t wlib_start = format->config.usid.wlib_start;
-			uint32_t ewlib_start = format->config.usid.ewlib_start;
+			/*
+			 * The Wide LIB is indexed relative to wlib_start, so the EWLIB
+			 * range must not start below it
+			 */
+			uint32_t ewlib_start = MAX(format->config.usid.ewlib_start, wlib_start);
 			uint32_t ewlib_end = format->config.usid.wlib_end;
 			uint32_t *sid_wide_func_ptr = NULL;
 
@@ -2839,6 +2863,17 @@ static int srv6_manager_release_sid_internal(struct zserv *client, struct srv6_s
 	}
 
 	block = locator->sid_block;
+
+	/*
+	 * A locator whose prefix was removed has no parent block anymore, and
+	 * all its SIDs were already freed along with it: nothing to release.
+	 */
+	if (!block) {
+		if (IS_ZEBRA_DEBUG_SRV6)
+			zlog_debug("%s: SRv6 locator '%s' has no prefix, no SID to release",
+				   __func__, locator_name);
+		return 0;
+	}
 
 	/* Lookup Zebra SID context and release it */
 	frr_each_safe (zebra_srv6_sid_ctx_list, &block->sids, zctx)

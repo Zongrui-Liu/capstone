@@ -214,15 +214,21 @@ extern void zebra_evpn_init(void);
 extern void zebra_vxlan_macvlan_up(struct interface *ifp);
 extern void zebra_vxlan_macvlan_down(struct interface *ifp);
 extern int vni_list_cmp(void *p1, void *p2);
-extern int zebra_vxlan_dp_network_mac_add(struct interface *ifp,
-					  struct interface *br_if,
-					  struct ethaddr *macaddr, vlanid_t vid,
-					  vni_t vni, uint32_t nhg_id,
-					  bool sticky, bool dp_static);
+extern int zebra_vxlan_dp_network_mac_add(struct interface *ifp, struct interface *br_if,
+					  struct ethaddr *macaddr, vlanid_t vid, vni_t vni,
+					  uint32_t nhg_id, bool sticky, bool dp_static,
+					  const struct ipaddr *vtep_ip);
 extern int zebra_vxlan_dp_network_mac_del(struct interface *ifp,
 					  struct interface *br_if,
 					  struct ethaddr *macaddr, vlanid_t vid,
 					  vni_t vni);
+
+/*
+ * A bridge-row FDB delete carries a VLAN and no VNI. Reinstall the
+ * router-MAC for the L3VNI that owns that VLAN, if zebra still has it.
+ */
+extern void zebra_vxlan_check_readd_rmac(struct interface *ifp, struct ethaddr *mac, vlanid_t vid,
+					 vni_t vni);
 
 extern void zebra_vxlan_set_accept_bgp_seq(bool set);
 extern bool zebra_vxlan_get_accept_bgp_seq(void);
