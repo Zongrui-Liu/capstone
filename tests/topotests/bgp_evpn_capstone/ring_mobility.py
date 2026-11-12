@@ -41,7 +41,9 @@ class RingMover:
     launch skew and batch duration are recorded.
     """
 
-    def __init__(self, tgen, leaves, robot_count):
+    def __init__(self, tgen, leaves, robot_count,
+                 trigger_gateway_ping=True, kernel_arp_notify=False,
+                 verify_local_state=False):
         self.tgen = tgen
         self.rings = active_rings(robot_count)
         self.slots = tuple(name for ring in self.rings for name in ring)
@@ -56,6 +58,15 @@ class RingMover:
             raise ValueError("The ring hosts must be defined in LEAVES")
         self.assignment = identities
         self.robot_count = robot_count
+        self.trigger_gateway_ping = trigger_gateway_ping
+        self.kernel_arp_notify = kernel_arp_notify
+        self.verify_local_state = verify_local_state
+        if self.kernel_arp_notify:
+            # This runs inside each robot host network namespace.
+            # Linux then sends GARP on eth0 UP/MAC changes.
+            for host in self.slots:
+                self.tgen.net[host].cmd_raises(
+                    "sysctl -w net.ipv4.conf.eth0.arp_notify=1")
 
     def rotated(self):
         next_assignment = {}
@@ -105,6 +116,25 @@ class RingMover:
             node.cmd_raises("ip link set dev eth0 up")
             node.cmd_raises("ip route replace default via {} dev eth0".format(
                 self.gateways[name]))
+            if self.verify_local_state:
+                # This verifies that Linux really has the expected identity.
+                # It does NOT verify that the network has converged.
+                data = json.loads(node.cmd_raises(
+                    "ip -j address show dev eth0"))
+                if len(data) != 1:
+                    raise AssertionError("{}: eth0 not found".format(name))
+                link = data[0]
+                got_mac = (link.get("address") or "").lower()
+                got_ips = {a.get("local") for a in link.get("addr_info", [])
+                           if a.get("family") == "inet"}
+                want_ip, want_mac = new_assignment[name]
+                want_ip = want_ip.split("/")[0]
+                if (got_mac != want_mac or got_ips != {want_ip}
+                        or "UP" not in link.get("flags", [])):
+                    raise AssertionError(
+                        "{} identity mismatch: wanted {}/{}, UP; got {}/{}, flags={}".format(
+                            name, want_ip, want_mac, sorted(got_ips), got_mac,
+                            link.get("flags")))
             return began
 
         up_started = self._parallel(reconnect)
@@ -117,13 +147,18 @@ class RingMover:
             node.cmd("ping -n -c 1 -W 1 -I eth0 {} >/dev/null 2>&1 &".format(
                 self.gateways[name]))
 
-        self._parallel(announce)
+        # A passive regression test must not introduce ARP-producing pings.
+        # Keep the original behavior by default for stress experiments.
+        if self.trigger_gateway_ping:
+            self._parallel(announce)
         end = time.time()
         self.assignment = new_assignment
         return {
             "start_epoch": start,
             "end_epoch": end,
             "apply_seconds": round(end - start, 6),
+            "local_identity_verified": int(self.verify_local_state)
+                if self.verify_local_state else "",
             "down_launch_skew_seconds": round(max(down_started.values()) - min(down_started.values()), 6),
             "up_launch_skew_seconds": round(max(up_started.values()) - min(up_started.values()), 6),
         }
@@ -195,6 +230,20 @@ def run_ring_experiment(mover, cycles, interval_seconds, output_dir,
             except Exception as exc:
                 row["end_epoch"] = time.time()
                 row["error"] = repr(exc)
+                # Record the ACTUAL local state after a partially failed
+                # batch; mover.assignment still describes the previous
+                # successfully completed batch in this case.
+                debug = {"failed_cycle": number, "error": repr(exc),
+                         "timestamp_epoch": time.time(), "hosts": {}}
+                for host in mover.slots:
+                    try:
+                        debug["hosts"][host] = json.loads(
+                            mover.tgen.net[host].cmd_raises(
+                                "ip -j address show dev eth0"))
+                    except Exception as query_exc:
+                        debug["hosts"][host] = {"error": repr(query_exc)}
+                (folder / "failed_local_identity_state.json").write_text(
+                    json.dumps(debug, indent=2))
                 rows.append(row)
                 break
             rows.append(row)
@@ -230,5 +279,6 @@ CYCLE_COLUMNS = [
     "cycle", "robot_count", "completed_robot_movements", "requested_T_seconds",
     "scheduled_offset_seconds", "actual_offset_seconds", "schedule_lag_seconds",
     "actual_T_seconds", "success", "start_epoch", "end_epoch", "apply_seconds",
-    "down_launch_skew_seconds", "up_launch_skew_seconds", "error",
+    "down_launch_skew_seconds", "up_launch_skew_seconds",
+    "local_identity_verified", "error",
 ]

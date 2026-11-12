@@ -302,6 +302,16 @@ ip link set vni{l2vni} up
         )
     )
 
+    # For the GARP regression only: allow unknown IPs in gratuitous ARP
+    # to create kernel neighbor entries on the L2VNI SVI. Disable to A/B
+    # against the default Linux behavior. Set before starting FRR.
+    if leaf in ("leaf1", "leaf2", "leaf3", "leaf4") and (
+        os.environ.get("CAPSTONE_LEAF_ARP_ACCEPT", "0") == "1"
+    ):
+        node.cmd_raises(
+            "sysctl -w net.ipv4.conf.br1000.arp_accept=1"
+        )
+
     for host in spec["hosts"]:
         node.cmd_raises(
             "ip link set eth-{host} master {l2br}; "
@@ -896,10 +906,19 @@ def test_clockwise_ring_mobility():
     probe_interval = float(os.environ.get("CAPSTONE_RING_PROBE", "0.2"))
     capture_spines = os.environ.get("CAPSTONE_RING_SPINE_EGRESS", "0") == "1"
 
+    # The validated GARP path requires arp_accept on the L2VNI SVI.
+    # Set the env var BEFORE pytest starts (setup_module creates the bridge).
+    if os.environ.get("CAPSTONE_LEAF_ARP_ACCEPT", "0") != "1":
+        pytest.fail("For GARP stress testing, set CAPSTONE_LEAF_ARP_ACCEPT=1 "
+                    "before launching pytest")
+
     # Prime the original host identities before enabling PCAPs so the
     # baseline excludes the initial discovery burst.
     _prime_host_adjacencies(tgen)
-    mover = RingMover(tgen, LEAVES, robots)
+    mover = RingMover(tgen, LEAVES, robots,
+                      trigger_gateway_ping=False,
+                      kernel_arp_notify=True,
+                      verify_local_state=True)
     robot_ips = sorted({mover.assignment[slot][0].split("/")[0]
                         for slot in mover.slots})
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -919,6 +938,89 @@ def test_clockwise_ring_mobility():
         r["controller_ping_success"] for r in results), len(results))
     logger.info("Clockwise ring results saved in %s", output)
     logger.info("Next: python3 analyze_ring.py %s", output)
+
+
+def test_macip_automatic_after_ethernet_change():
+    """Regression for MAC/IP Type-2 advertisement without a post-move ping.
+
+    Perform ONE four-way IP/MAC rotation and capture the new leaf-originated
+    MAC/IP advertisements before generating any post-rotation ICMP traffic.
+    This test is intentionally separate from the normal stress experiment.
+    """
+    from datetime import datetime, timezone
+    from verify_auto_macip import verify_auto_macip
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+
+    # A test selected with pytest -k does not run earlier BGP assertions.
+    # Wait for the fabric to be ready rather than confusing startup delay
+    # with failure of the new automatic-advertisement behavior.
+    peers_by_router = _expected_peers()
+    for name, peers in peers_by_router.items():
+        router = tgen.gears[name]
+        _, error = topotest.run_and_expect(
+            lambda r=router, p=peers: _peers_established(r, "l2vpn evpn", p),
+            None, count=90, wait=1)
+        assert error is None, "EVPN not established before movement: {}".format(error)
+
+    # One-time initial discovery is allowed BEFORE the movement; the patch
+    # must produce advertisements after changing the host Ethernet identity
+    # without using a gateway ping or continuous controller probes.
+    _prime_host_adjacencies(tgen)
+    leaf5 = tgen.gears["leaf5"]
+    for ip in ("45.0.0.11", "45.0.0.21", "45.0.0.31", "45.0.0.41"):
+        prefix = ip + "/32"
+        _, error = topotest.run_and_expect(
+            lambda p=prefix: _vrf_has_bgp_route(leaf5, p),
+            None, count=40, wait=1)
+        assert error is None, "Missing baseline robot route: {}".format(error)
+
+    mover = RingMover(tgen, LEAVES, robot_count=4,
+                      trigger_gateway_ping=False,
+                      kernel_arp_notify=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output = os.environ.get("CAPSTONE_AUTO_MACIP_OUTPUT_DIR") or os.path.join(
+        CWD, "mobility_results", "auto_macip_" + timestamp)
+    # No RingObservation controller probes: they could cause neighbor
+    # discovery and invalidate the regression's automatic-learning claim.
+    with RingObservation(tgen, output, CWD, robot_ips=(),
+                         enable_controller_probes=False,
+                         capture_access_arp=True,
+                         sample_seconds=0.5):
+        run_ring_experiment(mover, cycles=1, interval_seconds=3,
+                            output_dir=output, baseline_seconds=2,
+                            recovery_seconds=15)
+
+    # Record neighbor state BEFORE any ICMP probing or advertisement
+    # verification; crucial for differentiating missing GARP, missing
+    # Linux neighbor, and missing Zebra/BGP notification.
+    from pathlib import Path
+    diagnostics = []
+    for leaf in ("leaf1", "leaf2", "leaf3", "leaf4"):
+        host = "host" + leaf[-1] + "1"
+        ip, mac = mover.assignment[host]
+        ip = ip.split("/")[0]
+        diagnostics.append("=== {} expected {} {} ===".format(leaf, ip, mac))
+        diagnostics.append(tgen.net[leaf].cmd(
+            "sysctl net.ipv4.conf.br1000.arp_accept"))
+        diagnostics.append(tgen.net[leaf].cmd(
+            "ip -s neigh show to {} dev br1000".format(ip)))
+        diagnostics.append(tgen.gears[leaf].vtysh_cmd(
+            "show evpn arp-cache vni 1000"))
+    Path(output, "neighbor_diagnostics_after.txt").write_text(
+        "\n".join(diagnostics) + "\n")
+
+    # PCAP writers have exited, so decode completed files before any ping.
+    report = verify_auto_macip(output, expected_count=4)
+    logger.info("Automatic MAC/IP Type-2 advertisement verification: %s", report)
+    assert not report["missing"], (
+        "Missing automatically generated local MAC/IP Type-2 advertisements: "
+        "{}. Inspect auto_macip_verification.csv and PCAPs in {}".format(
+            report["missing"], output))
+    # Optional *subsequent* reachability checks are safe after verification.
+    _write_ring_recovery_checks(tgen, mover, output)
 
 
 if __name__ == "__main__":

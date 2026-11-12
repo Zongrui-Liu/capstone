@@ -41,7 +41,8 @@ def parse_ss_queues(output):
 class RingObservation:
     def __init__(self, tgen, folder, script_dir, robot_ips,
                  sample_seconds=0.5, probe_interval_seconds=0.2,
-                 capture_spine_egress=False):
+                 capture_spine_egress=False, enable_controller_probes=True,
+                 capture_access_arp=False):
         self.tgen = tgen
         self.folder = Path(folder)
         self.script_dir = Path(script_dir)
@@ -49,6 +50,9 @@ class RingObservation:
         self.sample_seconds = sample_seconds
         self.probe_interval_seconds = probe_interval_seconds
         self.capture_spine_egress = capture_spine_egress
+        self.enable_controller_probes = enable_controller_probes
+        self.capture_access_arp = capture_access_arp
+        self.arp_captures = []
         self.processes = []
         self.open_files = []
         self.captures = []
@@ -91,6 +95,19 @@ class RingObservation:
             for leaf in ROBOT_LEAVES:
                 for spine in SPINES:
                     self._pcap(leaf, "eth-" + spine)
+            if self.capture_access_arp:
+                for leaf in ROBOT_LEAVES:
+                    # The rotating robot is on host{N}1, one per leaf.
+                    interface = "eth-host" + leaf[-1] + "1"
+                    name = "arp_{}_{}.pcap".format(leaf, interface)
+                    self._launch(leaf, [
+                        "tcpdump", "-n", "-i", interface,
+                        "-s", "0", "-U", "-w",
+                        str(self.folder / name), "arp",
+                    ], self.folder / (name + ".stderr"))
+                    self.arp_captures.append({
+                        "leaf": leaf, "interface": interface, "file": name
+                    })
             if self.capture_spine_egress:
                 # Include both directed ends of ALL ten physical spine-leaf
                 # links. The default already captures eight leaf->spine ends.
@@ -100,15 +117,16 @@ class RingObservation:
                     for leaf in (*ROBOT_LEAVES, "leaf5"):
                         self._pcap(spine, "eth-" + leaf)
 
-            probe_script = self.script_dir / "probe_worker.py"
-            if not probe_script.is_file():
-                raise FileNotFoundError("Missing probe_worker.py: " + str(probe_script))
-            for ip in self.robot_ips:
-                self._launch("controller", [
-                    sys.executable, "-u", str(probe_script), ip,
-                    str(self.folder / ("controller_probe_" + ip + ".csv")),
-                    str(self.probe_interval_seconds),
-                ], self.folder / ("controller_probe_" + ip + ".stderr"))
+            if self.enable_controller_probes:
+                probe_script = self.script_dir / "probe_worker.py"
+                if not probe_script.is_file():
+                    raise FileNotFoundError("Missing probe_worker.py: " + str(probe_script))
+                for ip in self.robot_ips:
+                    self._launch("controller", [
+                        sys.executable, "-u", str(probe_script), ip,
+                        str(self.folder / ("controller_probe_" + ip + ".csv")),
+                        str(self.probe_interval_seconds),
+                    ], self.folder / ("controller_probe_" + ip + ".stderr"))
             time.sleep(0.6)
             exited = [node for node, p in self.processes if p.poll() is not None]
             if exited:
@@ -116,7 +134,9 @@ class RingObservation:
             self.started_epoch = time.time()
             manifest = {
                 "captures": self.captures,
-                "probe_ips": list(self.robot_ips),
+                "arp_captures": self.arp_captures,
+                "probe_ips": list(self.robot_ips) if self.enable_controller_probes else [],
+                "controller_probes_enabled": self.enable_controller_probes,
                 "scope": "leaf1-4 outbound to both spines" + (
                     " AND leaf5 outbound to both spines AND spine1-2 outbound to all 5 leaves" if self.capture_spine_egress else ""),
                 "tcp_queue_note": "ss TCP Send-Q and Recv-Q bytes, NOT FRR's internal BGP queue",
