@@ -6,3 +6,7 @@ mobility_results/
 
 # Ignore Python cache
 __pycache__/
+
+# Personal use for retrieving test_evpn_capstone.py from the capstone_v1 branch and merging it with the current version of test_evpn_capstone.py
+# By Yifan Sun
+merge.sh

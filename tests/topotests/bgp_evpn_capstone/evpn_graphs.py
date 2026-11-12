@@ -51,12 +51,24 @@ def read_ping(path):
         m = REPLY.search(line)
         if m:
             t, seq, rtt = m.groups()
-            probes[int(seq)] = {'unix_time': float(t), 'seq': int(seq), 'success': 1, 'rtt_ms': float(rtt)}
+            probes[int(seq)] = {
+                'unix_time': float(t),
+                'send_time': float(t) - float(rtt) / 1000,
+                'seq': int(seq),
+                'success': 1,
+                'rtt_ms': float(rtt)
+            }
             continue
         m = FAIL.search(line) or ERROR.search(line)
         if m:
             t, seq = m.groups()
-            probes.setdefault(int(seq), {'unix_time': float(t), 'seq': int(seq), 'success': 0, 'rtt_ms': ''})
+            probes.setdefault(int(seq), {
+                'unix_time': float(t),
+                'send_time': float(t) - 0.001,
+                'seq': int(seq),
+                'success': 0,
+                'rtt_ms': ''
+            })
         m = STATS.search(line)
         if m:
             summary = {'sent': int(m[1]), 'received': int(m[2]), 'loss_pct': float(m[3])}
@@ -339,7 +351,11 @@ def analyze_one(folder, output, chosen, bin_sec):
             ax.set(title=f'{folder.name}: {host} ICMP availability', xlabel='Seconds relative to collector start (or first probe)', ylabel='Reply observed (1=yes)', yticks=[0,1], ylim=(-.15,1.15))
             chart_finish(output/f'{folder.name}_ping_availability_{host}.png')
             fig, ax = plt.subplots(figsize=(10, 3.8))
-            ax.scatter([q for q,r in zip(t,data) if r['success']], [r['rtt_ms'] for r in data if r['success']], s=20)
+            ax.scatter(
+                [r['send_time'] - base for r in data if r['success']],
+                [r['rtt_ms'] for r in data if r['success']],
+                s=20
+            )
             ax.set(title=f'{folder.name}: {host} successful ping RTT', xlabel='Seconds relative to collector start (or first probe)', ylabel='RTT (ms)')
             chart_finish(output/f'{folder.name}_ping_rtt_{host}.png')
     if 'cpu' in chosen and cpus:
