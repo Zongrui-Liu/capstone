@@ -9,7 +9,7 @@
 #
 
 """
-test_evpn_capstone.py: Bring-up and basic mobility tests for the Capstone fabric.
+test_evpn_capstone.py: Fabric bring-up and offline mobility packet capture.
 
 The topology matches project_topology.pdf:
 
@@ -24,15 +24,13 @@ The underlay runs eBGP-unnumbered between each leaf and both spines. EVPN is
 carried over the same sessions with explicit route-targets so that routes
 import correctly across the different leaf ASNs.
 
-These tests validate fabric bring-up, route exchange, and one mobility exchange:
-  * every FRR process starts,
-  * the eBGP underlay sessions reach Established,
-  * the L2VPN EVPN sessions reach Established,
-  * every leaf has learned its L2VNI and the L3VNI (500), and
-  * host11 and host21 exchange IP/MAC identities while remaining reachable.
-
-The mobility test requires arping. Use --pause-at-end to inspect the swapped
-identities before teardown; a single exchange should not trigger MAC duplication.
+The original eight tests validate fabric bring-up and EVPN route exchange.
+The final capture test moves selected robot identities using one of two methods:
+  * automatic kernel GARP with arp_notify=1 / arp_accept=1, then controller pings
+    after ALL exchanges and a two-second state checkpoint;
+  * two normal gateway ARPs separated by the local-learning readiness check.
+Both capture BGP EVPN, access ARP/ICMP and VXLAN packets for offline analysis.
+Use --pause-at-end to inspect the topology before teardown.
 """
 
 import json
@@ -688,194 +686,6 @@ def _check_robot_mac_location(router, mac, expected_type, expected_vtep=None):
     return None
 
 
-def test_evpn_host11_host21_mobility():
-    """Swap host11 and host21's IP/MAC pairs once and check communication."""
-    # get_topogen returns the fabric created by setup_module.
-    tgen = get_topogen()
-
-    # routers_have_failure checks for router startup errors. Skip the test
-    # if the fabric failed to start, because mobility cannot be tested then.
-    if tgen.routers_have_failure():
-        pytest.skip(tgen.errors)
-
-    host11 = tgen.net["host11"]
-    host21 = tgen.net["host21"]
-    controller = tgen.net["controller"]
-    leaf1 = tgen.gears["leaf1"]
-    leaf2 = tgen.gears["leaf2"]
-
-    robot11_mac = "00:00:00:00:00:11"
-    robot21_mac = "00:00:00:00:00:21"
-
-    # cmd_raises runs a Linux command inside the selected host and fails
-    # the test if the command fails. Check that arping is installed.
-    host11.cmd_raises("command -v arping")
-    host21.cmd_raises("command -v arping")
-
-    # _prime_host_adjacencies sends gateway pings from the hosts so the
-    # leaves learn the original MAC/IP bindings before any movement.
-    _prime_host_adjacencies(tgen)
-
-    def check_before_move():
-        """Check that robot11 starts on leaf1 and robot21 starts on leaf2."""
-        # _check_robot_mac_location checks local/remote learning and makes
-        # sure the MAC is not flagged as duplicate. Stop on the first error.
-        error = _check_robot_mac_location(leaf1, robot11_mac, "local")
-        if error is not None:
-            return error
-        error = _check_robot_mac_location(leaf2, robot11_mac, "remote", "10.0.0.1")
-        if error is not None:
-            return error
-        error = _check_robot_mac_location(leaf2, robot21_mac, "local")
-        if error is not None:
-            return error
-        return _check_robot_mac_location(leaf1, robot21_mac, "remote", "10.0.0.2")
-
-    # run_and_expect repeatedly calls check_before_move until it returns
-    # None (all checks passed), or until the retry limit is reached.
-    _, result = topotest.run_and_expect(
-        check_before_move, None, count=90, wait=0.5
-    )
-    assert result is None, result
-
-    # _read_robot_mac saves the original entries for the report and the
-    # sequence-number comparison after the move.
-    before = {
-        "leaf1": {
-            robot11_mac: _read_robot_mac(leaf1, robot11_mac),
-            robot21_mac: _read_robot_mac(leaf1, robot21_mac),
-        },
-        "leaf2": {
-            robot11_mac: _read_robot_mac(leaf2, robot11_mac),
-            robot21_mac: _read_robot_mac(leaf2, robot21_mac),
-        },
-    }
-    robot11_sequence_before = before["leaf1"][robot11_mac]["localSequence"]
-    robot21_sequence_before = before["leaf2"][robot21_mac]["localSequence"]
-
-    # Remove both old IPs before assigning the new pairs. Keep the links
-    # up so EVPN can detect that the existing robot identities have moved.
-    host11.cmd_raises("ip address del 45.0.0.11/24 dev eth0")
-    host21.cmd_raises("ip address del 45.0.0.21/24 dev eth0")
-
-    # Exchange the MAC addresses, then give each host the matching IP.
-    # host11 now carries robot21; host21 now carries robot11.
-    host11.cmd_raises("ip link set dev eth0 address 00:00:00:00:00:21")
-    host21.cmd_raises("ip link set dev eth0 address 00:00:00:00:00:11")
-    host11.cmd_raises("ip address add 45.0.0.21/24 dev eth0")
-    host21.cmd_raises("ip address add 45.0.0.11/24 dev eth0")
-
-    # Set the gateway and clear cached ARP entries on both moved hosts.
-    host11.cmd_raises("ip route replace default via 45.0.0.1 dev eth0")
-    host21.cmd_raises("ip route replace default via 45.0.0.1 dev eth0")
-    host11.cmd_raises("ip neigh flush dev eth0")
-    host21.cmd_raises("ip neigh flush dev eth0")
-
-    # Each host announces its own new IP using gratuitous ARP. Both new
-    # IP/MAC pairs are configured before either host sends this traffic.
-    host11.cmd_raises("arping -U -c 1 -I eth0 45.0.0.21")
-    host21.cmd_raises("arping -U -c 1 -I eth0 45.0.0.11")
-
-    def check_after_move():
-        """Check that robot11 moved to leaf2 and robot21 moved to leaf1."""
-        # _check_robot_mac_location checks the new local/remote locations
-        # and confirms that a single move did not create duplicate flags.
-        error = _check_robot_mac_location(leaf2, robot11_mac, "local")
-        if error is not None:
-            return error
-        error = _check_robot_mac_location(leaf1, robot11_mac, "remote", "10.0.0.2")
-        if error is not None:
-            return error
-        error = _check_robot_mac_location(leaf1, robot21_mac, "local")
-        if error is not None:
-            return error
-        return _check_robot_mac_location(leaf2, robot21_mac, "remote", "10.0.0.1")
-
-    # run_and_expect waits for EVPN to distribute the new MAC locations.
-    _, result = topotest.run_and_expect(
-        check_after_move, None, count=60, wait=0.5
-    )
-    assert result is None, result
-
-    # _read_robot_mac saves the new entries so we can compare them with
-    # the original entries and include both states in the report.
-    after = {
-        "leaf1": {
-            robot11_mac: _read_robot_mac(leaf1, robot11_mac),
-            robot21_mac: _read_robot_mac(leaf1, robot21_mac),
-        },
-        "leaf2": {
-            robot11_mac: _read_robot_mac(leaf2, robot11_mac),
-            robot21_mac: _read_robot_mac(leaf2, robot21_mac),
-        },
-    }
-
-    # The new local leaf must advertise a higher mobility sequence.
-    assert after["leaf2"][robot11_mac]["localSequence"] > robot11_sequence_before
-    assert after["leaf1"][robot21_mac]["localSequence"] > robot21_sequence_before
-
-    # vtysh_cmd reads each leaf's ARP table as a Python dictionary. Save
-    # the IP-binding state after GARP, before sending gateway ARP requests.
-    arp_before_gateway = {
-        "leaf1": leaf1.vtysh_cmd("show evpn arp-cache vni 1000 json", isjson=True),
-        "leaf2": leaf2.vtysh_cmd("show evpn arp-cache vni 1000 json", isjson=True),
-    }
-
-    # A normal ARP exchange with the gateway establishes the new local
-    # IP bindings needed for routed traffic from the controller.
-    host11.cmd_raises("arping -c 1 -w 2 -I eth0 45.0.0.1")
-    host21.cmd_raises("arping -c 1 -w 2 -I eth0 45.0.0.1")
-
-    # vtysh_cmd reads the ARP tables again to record the new IP bindings.
-    arp_after_gateway = {
-        "leaf1": leaf1.vtysh_cmd("show evpn arp-cache vni 1000 json", isjson=True),
-        "leaf2": leaf2.vtysh_cmd("show evpn arp-cache vni 1000 json", isjson=True),
-    }
-
-    def check_controller_reachability():
-        """Ping both robot IPs from the controller after they have moved."""
-        # cmd_status runs the ping and returns its exit status and output.
-        # An exit status of zero means the ping succeeded.
-        status, output, error = controller.cmd_status("ping -c 1 -W 1 45.0.0.11")
-        if status != 0:
-            return "Controller cannot reach 45.0.0.11: {} {}".format(output, error)
-
-        # Check the second robot in the same way.
-        status, output, error = controller.cmd_status("ping -c 1 -W 1 45.0.0.21")
-        if status != 0:
-            return "Controller cannot reach 45.0.0.21: {} {}".format(output, error)
-        return None
-
-    # run_and_expect retries the pings while the IP routes finish updating.
-    _, result = topotest.run_and_expect(
-        check_controller_reachability, None, count=15, wait=0.5
-    )
-    assert result is None, result
-
-    report = {
-        "result": "passed",
-        "identity_moves": 2,
-        "host11": {"ip": "45.0.0.21/24", "mac": robot21_mac},
-        "host21": {"ip": "45.0.0.11/24", "mac": robot11_mac},
-        "before": before,
-        "after": after,
-        "arp_after_garp": arp_before_gateway,
-        "arp_after_gateway_exchange": arp_after_gateway,
-        "controller_reachable": ["45.0.0.11", "45.0.0.21"],
-    }
-
-    # os.path.join builds the report path inside the test log folder.
-    report_path = os.path.join(tgen.logdir, "mobility_single_swap.json")
-    # json.dump writes the report as JSON; indent=2 makes the file readable.
-    with open(report_path, "w", encoding="utf-8") as stream:
-        json.dump(report, stream, indent=2)
-        stream.write("\n")
-
-    # logger.info writes a completion message and the report path to the log.
-    logger.info("Single swap verified: host11=45.0.0.21, host21=45.0.0.11")
-    logger.info("Basic mobility report: %s", report_path)
-
-
 def _mobility_host_state(tgen, host_name):
     """Read a robot host's current IP/MAC and find its leaf in the topology.
 
@@ -1024,7 +834,7 @@ def _mobility_check_locations(tgen, host_states):
     Args:
         tgen: Existing running Topogen object from get_topogen().
         host_states (list of dict): Expected attachment records from
-            _mobility_host_state or _mobility_exchange_pair. Each record needs
+            _mobility_host_state or the capture exchange helper. Each record needs
             mac, leaf, and vtep. Use after-exchange records after a move;
             before-exchange records still describe the old locations.
 
@@ -1066,8 +876,8 @@ def _mobility_snapshot(tgen, host_states):
 
     Args:
         tgen: Existing running Topogen object from get_topogen().
-        host_states (list of dict): Host records from _mobility_host_state or
-            _mobility_exchange_pair. Only their mac fields are used here.
+        host_states (list of dict): Current records from _mobility_host_state or
+            the capture exchange helper. Only their mac fields are used here.
 
     Returns:
         dict: Nested entries indexed as snapshot[leaf_name][mac_address].
@@ -1096,117 +906,26 @@ def _mobility_snapshot(tgen, host_states):
     return snapshot
 
 
-def _mobility_send_arp(tgen, host_states, gratuitous):
-    """Send gratuitous announcements or normal gateway ARP for selected hosts.
+def _mobility_send_gateway_arp(tgen, host_states):
+    """Send one normal gateway ARP request from each supplied host.
 
     Args:
-        tgen: Existing running Topogen object from get_topogen().
-        host_states (list of dict): Current host records with host, ip, and
-            gateway fields. Use fresh records or the returned after_states
-            after an exchange, so packets advertise the currently assigned IP.
-        gratuitous (bool): True sends one arping -U announcement of each host's
-            own IP. False exchanges normal ARP with each host's gateway to
-            establish the IP binding used for routed controller traffic.
-
+        tgen: Running Topogen object; tgen.net supplies the host namespaces.
+        host_states (list of dict): Current host records with host and gateway
+            fields, such as those from _mobility_host_state after an exchange.
     Returns:
-        None. A failed command raises an error through cmd_raises.
-
+        None. cmd_raises fails the test if arping cannot run successfully.
     Side effects:
-        Sends ARP traffic and can update MAC learning, neighbor tables, and
-        EVPN advertisements. Requires arping installed in the container.
-
-    Example in PDB, with current records saved in states:
-        !tevpn._mobility_send_arp(tgen, states, gratuitous=False)
-        Successful calls have no return value to print. Use gratuitous=True
-        to announce the hosts' own addresses instead of querying the gateway.
+        Sends normal ARP to each gateway; can change neighbor learning and
+        EVPN advertisements. This helper does not send gratuitous ARP.
+    Example in PDB, with current host records stored in states:
+        !tevpn._mobility_send_gateway_arp(tgen, states)
     """
     for state in host_states:
         host = tgen.net[state["host"]]
-        if gratuitous:
-            # Remove the prefix because arping -U expects the host's own IP.
-            address = state["ip"].split("/")[0]
-            command = "arping -U -c 1 -I eth0 {}".format(address)
-        else:
-            command = "arping -c 1 -w 2 -I eth0 {}".format(state["gateway"])
-
-        # Run the selected ARP command inside this host; fail if it fails.
+        # Query the gateway inside this host; the sender is its current IP/MAC.
+        command = "arping -c 1 -w 2 -I eth0 {}".format(state["gateway"])
         host.cmd_raises(command)
-
-
-def _mobility_exchange_pair(tgen, first, second):
-    """Exchange two hosts' complete IP/MAC pairs and return their new states.
-
-    Args:
-        tgen: Existing running Topogen object from get_topogen().
-        first (dict): Fresh state of the first host, obtained with
-            _mobility_host_state(tgen, "host11"), for example. Pass the state
-            dictionary, rather than the string "host11".
-        second (dict): Fresh state of the second host, obtained in the same
-            way. Both records need host, leaf, vtep, gateway, ip, and mac.
-
-    Returns:
-        list: [first_after, second_after], containing the two new state
-        dictionaries. The input dictionaries remain unchanged. Host names,
-        leaf attachments, VTEPs, and gateways stay fixed; IP/MAC pairs exchange.
-
-    Requirements:
-        Different leaves, a shared gateway, distinct IPs and MACs, eth0, and
-        arping. Read states immediately before use; stale IP values can make
-        the address-removal commands fail.
-
-    Side effects:
-        Changes live IP/MAC configuration, restores default routes, clears
-        host neighbor caches, and sends GARP. Links stay up. This helper does
-        not wait for convergence, compare sequences, test the controller,
-        perform normal gateway ARP, or automatically roll back a failure.
-        Prefer _mobility_run_pair for a complete checked exchange.
-
-    Example in PDB:
-        !first = tevpn._mobility_host_state(tgen, "host11")
-        !second = tevpn._mobility_host_state(tgen, "host21")
-        !after_states = tevpn._mobility_exchange_pair(tgen, first, second)
-        p after_states[0]["ip"] == second["ip"]
-        True
-    """
-    assert first["leaf"] != second["leaf"], "Hosts must be on different leaves"
-    assert first["gateway"] == second["gateway"], "Hosts must share a gateway"
-    assert first["ip"] != second["ip"], "Hosts must have different IP addresses"
-    assert first["mac"] != second["mac"], "Hosts must have different MAC addresses"
-
-    first_host = tgen.net[first["host"]]
-    second_host = tgen.net[second["host"]]
-
-    # cmd_raises executes each Linux command in its host and fails on errors.
-    # Remove both current IPs before assigning either replacement identity.
-    first_host.cmd_raises("ip address del {} dev eth0".format(first["ip"]))
-    second_host.cmd_raises("ip address del {} dev eth0".format(second["ip"]))
-
-    # Change both MACs, then add each MAC's matching IP. Keep the links up.
-    first_host.cmd_raises("ip link set dev eth0 address {}".format(second["mac"]))
-    second_host.cmd_raises("ip link set dev eth0 address {}".format(first["mac"]))
-    first_host.cmd_raises("ip address add {} dev eth0".format(second["ip"]))
-    second_host.cmd_raises("ip address add {} dev eth0".format(first["ip"]))
-
-    # copy creates separate records without changing the saved before-state.
-    first_after = first.copy()
-    first_after["ip"] = second["ip"]
-    first_after["mac"] = second["mac"]
-    second_after = second.copy()
-    second_after["ip"] = first["ip"]
-    second_after["mac"] = first["mac"]
-    after_states = [first_after, second_after]
-
-    for state in after_states:
-        host = tgen.net[state["host"]]
-        # Restore the default route and clear the host's cached ARP neighbors.
-        host.cmd_raises(
-            "ip route replace default via {} dev eth0".format(state["gateway"])
-        )
-        host.cmd_raises("ip neigh flush dev eth0")
-
-    # Announce the new identities after both hosts are completely configured.
-    _mobility_send_arp(tgen, after_states, gratuitous=True)
-    return after_states
 
 
 def _mobility_check_controller(tgen, host_states):
@@ -1243,153 +962,17 @@ def _mobility_check_controller(tgen, host_states):
     return None
 
 
-def _mobility_run_pair(tgen, first_host_name, second_host_name):
-    """Exchange a robot host pair once and verify the resulting mobility.
-
-    This is the main helper for teammates who want one complete checked move.
-    See MULTIPLE_PAIR_MOBILITY.md for the PDB quick start and a full report example.
-
-    Args:
-        tgen: The existing running Topogen topology. Get it with
-            tgen = tevpn.get_topogen() after importing this module as tevpn.
-            tgen.net contains host objects and tgen.gears contains FRR routers.
-            Pass this object, rather than a hostname or a new Topogen instance.
-        first_host_name (str): First host namespace name, for example "host11"
-            or "host12". Pass a string, rather than its IP, MAC, or host object.
-        second_host_name (str): Second host namespace name, for example
-            "host21" or "host22", on another leaf in the same robot fabric.
-
-    Requirements:
-        The topology and BGP sessions must be running. Both hosts must be in
-        LEAVES, use robot VNI 1000 with a shared gateway and one IPv4 address on
-        eth0, and have distinct IP/MAC identities. arping must be installed.
-        This helper expects normal movement without duplicate flags; repeated
-        rapid exchanges can trigger duplicate detection and make it fail.
-
-    Returns:
-        dict: A report with these keys, returned only after all checks pass:
-            hosts: The two host namespace names, in call order.
-            identity_moves: 2, because both robot identities change leaves.
-            before_hosts: Two records of the original current IP/MAC states.
-            after_hosts: Two records of the new current IP/MAC states.
-            before_macs: Raw MAC snapshots, indexed by leaf name then MAC.
-            after_macs: The same structure after the MAC move, before normal
-                gateway ARP. Neighbor fields reflect that earlier snapshot.
-            controller_reachable: True, meaning both destination pings passed.
-        It does not return False on failure: failed checks raise an assertion,
-        pytest failure, or command error. Failures do not roll back the hosts.
-
-    Side effects:
-        Generates ARP and pings, exchanges live IP/MAC pairs, restores routes,
-        and clears host neighbor caches. Host namespaces and links stay in
-        place. Uses current identities, even if earlier tests already swapped
-        them. Logs a completion message; manual calls do not save a JSON file.
-        The caller can save the returned report. The automated multiple-pair
-        test collects these reports into mobility_multiple_pairs.json.
-
-    Example in PDB, with tevpn imported and tgen already obtained:
-        !report = tevpn._mobility_run_pair(tgen, "host11", "host21")
-        p report["hosts"]
-        ['host11', 'host21']
-        p report["identity_moves"]
-        2
-        p report["controller_reachable"]
-        True
-        For the other pair, pass "host12" and "host22" instead. Actual IP/MAC
-        and sequence values depend on the state before this call.
-    """
-    # Read the current identities and their physical leaf attachments.
-    first = _mobility_host_state(tgen, first_host_name)
-    second = _mobility_host_state(tgen, second_host_name)
-    before_states = [first, second]
-    for state in before_states:
-        # Check that each selected host has the ARP utility installed.
-        tgen.net[state["host"]].cmd_raises("command -v arping")
-
-    # Establish the original IP/MAC bindings by exchanging ARP with the gateway.
-    _mobility_send_arp(tgen, before_states, gratuitous=False)
-    # Wait for both current MAC locations to be known across robot VNI 1000.
-    _mobility_wait(_mobility_check_locations, (tgen, before_states))
-    # Save the original entries and local sequences before changing the hosts.
-    before = _mobility_snapshot(tgen, before_states)
-    original_sequences = {}
-    for state in before_states:
-        original_sequences[state["mac"]] = before[state["leaf"]][state["mac"]][
-            "localSequence"
-        ]
-
-    # Exchange the complete identities using the same helper for either pair.
-    after_states = _mobility_exchange_pair(tgen, first, second)
-    # Wait for new local/remote locations, with no duplicate MAC flags.
-    _mobility_wait(_mobility_check_locations, (tgen, after_states))
-    # Save the new entries for the sequence checks and the report.
-    after = _mobility_snapshot(tgen, after_states)
-    for state in after_states:
-        sequence = after[state["leaf"]][state["mac"]]["localSequence"]
-        assert sequence > original_sequences[state["mac"]], (
-            "Mobility sequence did not increase for {}".format(state["mac"])
-        )
-
-    # Normal gateway ARP creates the IP bindings needed for routed traffic.
-    _mobility_send_arp(tgen, after_states, gratuitous=False)
-    # Retry controller pings while the corresponding IP routes finish updating.
-    _mobility_wait(_mobility_check_controller, (tgen, after_states), timeout=20)
-
-    # Log each completed pair so the progress can be followed during the test.
-    logger.info(
-        "Host pair mobility verified: %s <-> %s", first_host_name, second_host_name
-    )
-    return {
-        "hosts": [first_host_name, second_host_name],
-        "identity_moves": 2,
-        "before_hosts": before_states,
-        "after_hosts": after_states,
-        "before_macs": before,
-        "after_macs": after,
-        "controller_reachable": True,
-    }
-
-
-def test_evpn_multiple_host_pairs_mobility():
-    """Use reusable helpers to exchange host11/21 and host12/22 once each."""
-    # Get the existing fabric and skip mobility if its routers failed to start.
-    tgen = get_topogen()
-    if tgen.routers_have_failure():
-        pytest.skip(tgen.errors)
-
-    # Add other cross-leaf robot host pairs here to reuse the same procedure.
-    host_pairs = [
-        ("host11", "host21"),
-        ("host12", "host22"),
-        ("host31", "host41"),
-        ("host32", "host42")
-    ]
-
-    # Repeatedly run the module-level session check before starting movement.
-    _mobility_wait(_mobility_check_sessions, (tgen,), timeout=45)
-    report = {"result": "incomplete", "identity_moves": 0, "pairs": []}
-    try:
-        for first_host_name, second_host_name in host_pairs:
-            # Run the same exchange and verification helpers for this pair.
-            pair_report = _mobility_run_pair(tgen, first_host_name, second_host_name)
-            report["pairs"].append(pair_report)
-            report["identity_moves"] += pair_report["identity_moves"]
-        report["result"] = "passed"
-    finally:
-        # Save completed pair observations even if a later pair fails.
-        report_path = os.path.join(tgen.logdir, "mobility_multiple_pairs.json")
-        with open(report_path, "w", encoding="utf-8") as stream:
-            # json.dump writes a readable JSON report to the test log folder.
-            json.dump(report, stream, indent=2)
-            stream.write("\n")
-        logger.info("Multiple-pair mobility report: %s", report_path)
-
-
 def test_evpn_type2_mobility_capture():
     """Capture only after the main tests and an explicit stable readiness check.
 
-    Records all leaf/spine links and both moved-host gateway ARP rounds;
-    builds analysis/type2_timeline.html AFTER captures stop. See
+    Records BGP/VXLAN on all leaf/spine links. Default GARP mode enables host
+    arp_notify=1 and robot-leaf arp_accept=1, waits five seconds, exchanges
+    ALL selected pairs, and reads state after two seconds. Each moved host
+    then pings the controller once. No manual GARP or pre-move ping is used;
+    the kernel generates any announcements during identity exchange.
+    MOBILITY_ANNOUNCEMENT_METHOD=two_gateway_arps retains the two-request mode.
+    The original fabric checks run first; no earlier test moves robot identities.
+    Builds analysis/type2_timeline.html AFTER captures stop. See
     EVPN_PACKET_CAPTURE.md for parameters, packet counts and run instructions.
     """
     from bgp_evpn_capstone import evpn_capture_mobility as capture_mobility
@@ -1399,7 +982,10 @@ def test_evpn_type2_mobility_capture():
     if tgen.routers_have_failure():
         pytest.skip(tgen.errors)
     # The helper uses existing topology readers, without building another fabric.
-    capture_mobility.run_capture_mobility(tgen, sys.modules[__name__])
+    announcement_method = os.environ.get("MOBILITY_ANNOUNCEMENT_METHOD", "garp")
+    capture_mobility.run_capture_mobility(
+        tgen, sys.modules[__name__], announcement_method=announcement_method
+    )
 
 
 if __name__ == "__main__":

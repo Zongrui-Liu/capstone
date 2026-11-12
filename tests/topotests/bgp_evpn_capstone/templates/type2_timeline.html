@@ -88,7 +88,7 @@ footer { margin-top:15px; color:var(--muted); font-size:12px; }
 </div>
 <div class="tools">
   <span class="legend"><i class="swatch"></i>Advertisements</span><span class="legend"><i class="swatch wd"></i>Withdrawals</span>
-  <span class="legend" style="color:#e9a0ff">× Captured gateway ARP at new leaf</span>
+  <span class="legend" style="color:#e9a0ff">× Captured host GARP / gateway ARP at new leaf</span>
   <span class="muted" id="unit-note">Cumulative Type-2 NLRI transmissions · all observed copies</span>
   <span class="spacer"></span><button id="export" type="button">Download filtered CSV</button>
 </div>
@@ -98,14 +98,14 @@ footer { margin-top:15px; color:var(--muted); font-size:12px; }
 <h2>Type-2 NLRI counts by physical link and direction</h2>
 <p class="muted">One capture endpoint per link. Counts follow the filters; quiet captured links remain visible.</p>
 <div class="table-wrap"><table><thead><tr><th>Link</th><th>Leaf → spine ads</th><th>Leaf → spine withdrawals</th><th>Spine → leaf ads</th><th>Spine → leaf withdrawals</th></tr></thead><tbody id="link-counts"></tbody></table></div>
-<h2 style="margin-top:20px">Captured gateway ARP arrivals</h2>
-<p class="muted">× marks when a gateway ARP request reached the new leaf's host port. Close marks can overlap.</p>
-<div class="table-wrap"><table><thead><tr><th>Elapsed (s)</th><th>Capture time UTC</th><th>Robot IP / MAC</th><th>New leaf</th><th>Packet</th><th>PCAP point / frame</th></tr></thead><tbody id="host-arrivals"></tbody></table></div>
+<h2 style="margin-top:20px">Captured host ARP arrivals</h2>
+<p class="muted">× marks a GARP or gateway ARP request at the new leaf's host port. The Kind column distinguishes them. Close marks can overlap.</p>
+<div class="table-wrap"><table><thead><tr><th>Elapsed (s)</th><th>Capture time UTC</th><th>Robot IP / MAC</th><th>New leaf</th><th>Kind</th><th>Target IP</th><th>PCAP point / frame</th></tr></thead><tbody id="host-arrivals"></tbody></table></div>
 <div class="table-head"><div><h2>Route event records</h2><p class="muted" id="table-summary"></p></div><div class="pager"><button id="previous" type="button">Previous</button><span id="page"></span><button id="next" type="button">Next</button><button id="order" type="button">Oldest first ↓</button></div></div>
 <div class="table-wrap"><table><thead><tr><th>Capture time (UTC)</th><th>Elapsed (s)</th><th>Point / interface</th><th>Direction</th><th>Event</th><th>Robot MAC</th><th>Robot IP / form</th><th>RD</th><th>Frame / BGP message</th><th>Mobility seq.</th></tr></thead><tbody id="rows"></tbody></table></div>
 <div id="detail" class="detail" hidden><h2>Selected route record</h2><div id="detail-grid" class="detail-grid"></div></div>
 <details><summary>How to interpret the timestamps and counts</summary>
-  <p>The horizontal axis uses capture-file timestamps. Zero is session capture start when a manifest is available, otherwise the first decoded event. Step lines change only at recorded times; pixel positions are approximate. The table preserves full timestamp digits exported by TShark. Purple × marks are captured gateway ARP arrivals.</p>
+  <p>The horizontal axis uses capture-file timestamps. Zero is session capture start when a manifest is available, otherwise the first decoded event. Step lines change only at recorded times; pixel positions are approximate. The table preserves full timestamp digits exported by TShark. Purple × marks are captured host GARP or gateway ARP arrivals.</p>
   <p>A message spanning TCP segments is assigned the capture time of the frame where TShark displays its completed reassembly. Multiple BGP messages in one frame, and multiple NLRIs in one message, can share a timestamp. Equal timestamps do not establish an order across different BGP sessions or capture points.</p>
   <p>NLRI mode counts MAC-only and MAC/IP separately, including propagation and re-advertisements. Message mode counts distinct capture-point/frame/message identifiers that contain matching Type-2 records. An UPDATE containing both advertisements and withdrawals contributes once to each series; the series must not be added to obtain a unique-message total.</p>
   <p>Filters and the time window apply before counting. Counts start at zero for the selected window. Experiment markers use the manifest's host-clock times. Packet observation time does not establish forwarding-table installation time, per-robot outage, or internal router processing time. Clock accuracy, capture loss, and TCP reassembly affect interpretation; digit precision is not an accuracy guarantee.</p>
@@ -348,7 +348,7 @@ function drawHostArrivals() {
         const mac = document.getElementById("mac").value;
         if (time < bounds.start || time > bounds.end || (mac && marker.mac !== mac)) { continue; }
         const tr = document.createElement("tr");
-        for (const value of [marker.relative_seconds,marker.capture_time_utc,marker.ip + " / " + marker.mac,marker.leaf,marker.arp_kind,marker.capture_point + " / " + marker.frame_number]) {
+        for (const value of [marker.relative_seconds,marker.capture_time_utc,marker.ip + " / " + marker.mac,marker.leaf,marker.arp_kind,marker.target_ip || "",marker.capture_point + " / " + marker.frame_number]) {
             const td = document.createElement("td"); td.textContent = value; tr.appendChild(td);
         }
         body.appendChild(tr);

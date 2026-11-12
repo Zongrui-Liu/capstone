@@ -130,8 +130,9 @@ def _start_capture_process(router, capture, capture_filter):
     capture["_log_stream"] = log_stream
 
 
-def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None):
-    """Start background BGP capture on every selected spine-to-leaf link.
+def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None,
+                  capture_filter="tcp port 179"):
+    """Start background packet capture on selected spine-to-leaf links.
 
     Args:
         tgen: The RUNNING Topogen object returned by fabric.get_topogen().
@@ -144,6 +145,8 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None):
         spine_names (list[str] or None): Capture routers, default spine1/spine2.
         leaf_names (list[str] or None): Connected leaves, default leaf1..leaf5.
             Each selected spine must have interfaces named eth-<leaf name>.
+        capture_filter (str): libpcap filter; default is BGP only. Use
+            "tcp port 179 or udp port 4789" to include VXLAN data packets.
 
     Returns:
         dict: A live session containing directory, captures, and markers. Keep
@@ -151,8 +154,8 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None):
         objects and cannot itself be json.dump'ed; a JSON manifest is saved.
 
     Side effects:
-        Starts one dumpcap process per spine, captures BOTH directions of TCP
-        port 179 (IPv4 and IPv6), and writes PCAPNG/log/manifest files. Does not
+        Starts one dumpcap process per spine, captures BOTH directions matching
+        capture_filter, and writes PCAPNG/log/manifest files. Does not
         move hosts or change router configuration. Decoding starts only after
         capture_stop has flushed all files. Stop in a finally block.
         Raises RuntimeError if capture fails; partially started processes stop.
@@ -175,7 +178,7 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None):
     directory = create_capture_directory(output_dir)
     session = {
         "directory": str(directory), "captures": [], "markers": [],
-        "started_epoch": time.time(),
+        "started_epoch": time.time(), "capture_filter": capture_filter,
     }
     try:
         for spine_name in spine_names:
@@ -197,7 +200,7 @@ def capture_start(tgen, output_dir=None, spine_names=None, leaf_names=None):
                     "spine": spine_name, "link": leaf_name + "--" + spine_name,
                 })
             # Reuse the launcher that also handles the ARP access captures.
-            _start_capture_process(router, capture, "tcp port 179")
+            _start_capture_process(router, capture, capture_filter)
             session["captures"].append(capture)
             # Confirm capture readiness instead of assuming a fixed sleep works.
             _wait_for_capture(capture, timeout=10)

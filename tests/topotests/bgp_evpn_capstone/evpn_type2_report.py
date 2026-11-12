@@ -108,6 +108,8 @@ def build_report_data(events_csv, manifest_path=None):
     for info in manifest.get("captures", []):
         if info.get("point_role") in ("arp_access", "host_access"):
             continue
+        # A quiet capture point is still a measured zero, even with no NLRIs.
+        points.setdefault(info["capture_point"], {"advertisement": 0, "withdrawal": 0})
         for interface in info.get("interfaces", []):
             name = interface.get("link")
             if name:

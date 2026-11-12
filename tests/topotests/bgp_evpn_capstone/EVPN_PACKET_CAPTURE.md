@@ -1,142 +1,190 @@
-# Offline Type-2 mobility capture in the main test
+# EVPN mobility capture: supported methods
 
-Run the main suite inside the existing container:
+The main suite keeps the original eight fabric checks and one mobility capture
+case, `test_evpn_type2_mobility_capture`. The capture case reuses the topology created by the main suite.
+
+## Run a method
+
+Inside the existing container:
 
 ```bash
 cd /home/frr/frr/tests/topotests
-sudo -E pytest -s bgp_evpn_capstone/test_evpn_capstone.py
+sudo -E env MOBILITY_ANNOUNCEMENT_METHOD=garp pytest -s -q bgp_evpn_capstone/test_evpn_capstone.py
 ```
 
-The final main-test case, `test_evpn_type2_mobility_capture`, uses that SAME
-Topogen topology. There is no separate capture test module or second setup.
-For focused debugging you can select this node from the main module; the
-readiness gate still runs, but use the full command above for normal experiments.
+To compare the two-ARP method, finish the first pytest session and start a new
+one so each method uses a fresh topology:
 
-## Sequence
+```bash
+sudo -E env MOBILITY_ANNOUNCEMENT_METHOD=two_gateway_arps pytest -s -q bgp_evpn_capstone/test_evpn_capstone.py
+```
 
-1. Read current identities for host11/host21 and host12/host22. Earlier main
-   tests can have swapped them: namespace names are fixed, IP/MAC pairs move.
-2. Before capturing, prime gateway ARP and verify controller connectivity.
-   Require all expected BGP sessions, correct MAC locations and active IP
-   bindings on robot leaves, plus the selected MAC/IP records and BGP/kernel
-   `/32` routes at leaf5. Relevant ready state must remain unchanged for five
-   seconds. Uptime and reachability timers do not count as route changes.
-3. Start dumpcap on spine1 and spine2, each on ALL configured leaf links.
-   The current 5-leaf/2-spine fabric has 10 captured physical links, both
-   directions, with filter `tcp port 179`. Each link is captured at ONE end,
-   so packets are not counted twice merely because both ends were monitored.
-4. Add ARP captures at the selected hosts' leaf-facing access ports.
-   These provide actual arrival timestamps for moved-host packets.
-5. Start recording BEFORE each pair moves. Exchange the complete IP/MAC
-   identities without sending packets in the configuration helper itself.
-6. Send one normal `arping -c 1 -w 2 -I eth0` to the gateway (`45.0.0.1`) from
-   each moved host. Wait at least 0.5 seconds after this round. Check that
-   both MACs are local on the expected host ports and that Linux has cleared
-   their remote neighbors. The readiness check times out after five seconds.
-7. Send the second normal gateway ARP from each moved host. Observe for 15
-   seconds after the retry round, then perform the second pair. The result
-   records the measured interval between the two ARP arrivals for each host.
-8. Stop/flush all captures in `finally`, including on failures. THEN run
-   TShark offline, produce CSV/JSON and draw `analysis/type2_timeline.html`.
+`garp` is the default. These are the only supported announcement methods.
+Run the full main suite before interpreting an experiment; its original checks
+establish initial sessions, host adjacencies and routes. Each full run collects
+nine tests. `--pause-at-end` pauses before teardown for manual inspection.
 
-The capture checks both gateway ARP rounds and Type-2 advertisements and
-withdrawals for the moved identities. Use the Type-2 details to see whether each
-receiving leaf originates a MAC/IP route after the retry. A separate data-plane
-probe is needed to measure routed communication after the move.
+## Settings enabled, then ping (`garp`)
 
-## Timeline and link records
+1. Discover configured robot hosts in VNI 1000. Default movement pairs are
+   host11/host21 and host12/host22; additional configured pairs can be supplied.
+   Each identity keeps its IP/MAC pair as it changes attachment leaf. Each
+   exchange represents two identity moves. A host must occur in only one pair.
+2. Check BGP sessions and start packet captures. Enable
+   `net.ipv4.conf.br1000.arp_accept=1` on every robot leaf and
+   `net.ipv4.conf.eth0.arp_notify=1` on every robot host. Interface names come
+   from the topology; leaf5/controller VNI 2000 is excluded from these settings.
+   Read and save original/enabled values in `kernel_arp_settings.json`.
+3. Wait five quiet seconds, then check existing local IP/MAC bindings and
+   remote host routes. This capture case sends no pre-move ping or ARP to
+   prime the topology; the original fabric checks have already run.
+4. Exchange ALL selected pairs. For each pair, remove both old IPv4 addresses,
+   add both exchanged addresses, change both MACs, and restore default routes.
+   The final IPv4 address is present when Linux processes the MAC change.
+   There is no explicit neighbor flush, manual GARP, or link down/up operation.
+   Linux can emit GARP automatically because arp_notify is enabled.
+5. After every exchange has finished, wait two seconds and save FRR MAC state,
+   kernel neighbors, VRF routes and bridge FDBs before ANY moved host pings.
+6. Ping controller `20.0.0.51` once from each moved host, sequentially, using
+   `ping -n -D -c 1 -W 2`. There is no retry or ping from unmoved hosts in this
+   capture case. A ping may generate normal gateway ARP to `45.0.0.1`; capture
+   and distinguish it from the earlier automatic GARP.
+7. Save post-ping state, verify the kernel settings remain enabled, observe
+   for 15 more seconds, and save final state. Stop captures in `finally`, then
+   decode them and generate the offline timeline.
 
-The HTML has cumulative combined/per-spine graphs, a per-link direction table,
-an ARP-arrival table, and detailed sortable/filterable Type-2 records. Choose a
-physical link such as `leaf2--spine1` and a direction to isolate its updates.
+Settings are applied inside the simulated namespaces after interfaces exist.
+They disappear with topology teardown; the VM/container root settings are not
+changed. Linux IP/MAC reconfiguration can still alter a host's neighbor cache
+without an explicit flush command.
 
-Purple **×** on the x axis marks captured host ARP requests arriving at
-their new leaf. Hover over the mark or use the arrival table for its full
-timestamp, MAC, leaf and PCAP frame. The first and second round markers show
-when the test started the respective commands.
-Close marks can overlap. Flooded copies, replies, errors and unrelated hosts
-are excluded. Arrival marks do not give the exact IP/MAC configuration-change
-time. The report header records this run's method.
+## Two gateway ARPs (`two_gateway_arps`)
 
-All plots use PCAP timestamps; no live polling/streaming chart is used. Raw
-epoch and UTC fields preserve TShark's digits. Zero is capture session start.
-Visual pixel placement is approximate. BGP messages spanning TCP segments use
-the frame where reassembly completes, and equal timestamps do not establish
-causal ordering across sessions. This is not an automatic BGP convergence metric.
+This method keeps its sequential pair workflow:
 
-Each Type-2 CSV row includes `link`, `sender`, `receiver`, `direction`,
-`origin_leaf`, `transmission`, RD, MAC, optional IP, VTEP next hop, VNIs,
-mobility sequence and original frame/message identifiers.
+1. Before capture, send normal gateway ARP, verify controller reachability,
+   and require five continuous seconds of stable, ready forwarding state.
+2. Start captures, exchange one pair using the shared exchange helper, and
+   send one normal gateway ARP from each moved host.
+3. Wait at least 0.5 seconds and check local MAC learning and remote-neighbor
+   state before sending the second normal gateway ARP.
+4. Wait five seconds, save state, ping the controller once from each moved
+   host, and observe for 15 seconds. Then process the next pair.
+
+This method does not enable the automatic-GARP sysctls. Its two ARPs are normal
+requests for the gateway, not self-targeted GARP. Both supported methods retain
+the installed remote-L2-neighbor FRR patch and avoid an explicit host-cache flush.
+
+## Validation and interpreting success
+
+Both methods require correct final local MAC/IP bindings, new MAC/IP Type-2
+advertisements toward both spines, and successful host-to-controller pings.
+The settings method additionally requires captured automatic GARP and checks
+that every exchange completed before any moved-host ping. The two-ARP method
+requires two captured gateway requests per moved host before its ping phase.
+
+Captures, JSON and HTML are saved before final assertions. A report result of
+`captured` means collection finished, not that validation passed. `passed` is
+written only after the checks succeed. A successful ping alone does not prove
+that GARP learned the IP binding or that the reply used a direct tunnel.
+Compare `kernel_before_ping`, `macs_before_ping`, `forwarding_before_ping`,
+post-ping snapshots, ARP arrivals and Type-2/VXLAN timestamps.
+
+## Capture coverage and timeline
+
+BGP and VXLAN are captured on every configured leaf-spine link, once at the
+spine end, in both directions (`tcp port 179 or udp port 4789`). ARP/ICMP is
+captured on robot access ports: all robot ports for the settings method and
+selected moved-host ports for the two-ARP method.
+
+`analysis/type2_timeline.html` is generated AFTER capture finishes. Its combined
+and per-spine graphs support MAC, route form, link, direction, RD and time-range
+filters. The count selector switches between Type-2 NLRIs and BGP UPDATE
+messages. CSV timestamps retain the captured precision; no live polling clock
+is used. Zero is capture-session start, so preparation and deliberate waits
+are visible before the first movement.
+
+Purple x markers indicate captured host GARP or gateway ARP requests arriving
+at their new leaf. The arrival table gives exact timestamps, source IP/MAC,
+target IP, kind and frame. Nearby markers can overlap. Flooded copies, replies
+and unrelated host packets are excluded from these movement markers.
+
+Each Type-2 record includes the physical link, sender, receiver, RD, MAC,
+optional IP, next-hop VTEP, VNIs and mobility sequence when present:
 
 | Direction / transmission | Meaning |
 |---|---|
-| `leaf_to_spine` / `leaf_originated` | RD maps to the leaf sending this NLRI. |
-| `leaf_to_spine` / `leaf_propagated` | A leaf sends a route whose RD maps to another leaf. |
-| `spine_to_leaf` / `spine_forwarded` | Spine forwards the route on an eBGP session toward this leaf. |
-| `unknown` | Capture metadata was insufficient; no sender/origin is invented. |
+| `leaf_to_spine` / `leaf_originated` | The route RD maps to the sending leaf. |
+| `leaf_to_spine` / `leaf_propagated` | A leaf sends a route originated at another leaf. |
+| `spine_to_leaf` / `spine_forwarded` | A spine forwards the route toward a leaf over eBGP. |
+| `unknown` | Metadata does not establish the sender or origin. |
 
-The project's spines use eBGP. Here “forwarded” does not mean the BGP route
-reflector feature. A link direction identifies the transport sender; the RD
-mapping identifies the originating leaf in this configured fabric. Withdrawals
-usually do not carry a next hop or mobility sequence; blank fields stay blank.
+The spines use eBGP; forwarding here does not mean BGP route reflection. Link
+direction and route origin are separate. Withdrawals usually lack next-hop
+and mobility-sequence attributes, so those fields remain blank.
 
-Counts are per-NLRI observations on links, including propagated copies.
-MAC-only and MAC/IP are separate records. A BGP UPDATE can contain several
-records; a TCP packet can contain several UPDATEs. Do not equate any of these
-counts with unique robots or moves. `type2_links.csv` partitions totals by link
-and direction, including zero counts for quiet captured links.
+Counts include observed copies across links. MAC-only and MAC/IP are separate
+NLRIs; a BGP UPDATE may carry several NLRIs, and a TCP packet may carry several
+UPDATEs. A mixed UPDATE can count in both advertisement and withdrawal series.
+Do not equate these totals with unique moves, packets or installed routes.
+Packet timestamps establish observations, not exact kernel/FIB convergence.
+Check dumpcap drops and original PCAPs when interpreting unexpected results.
+
+## Follow the VXLAN path
+
+`analysis/vxlan_packets.csv` records physical link/direction, outer VTEPs, VNI,
+inner IP/MAC/TTL, ICMP ID/sequence and encapsulated ARP. Match inner addresses
+and ICMP ID/sequence to follow a request (`icmp_type=8`) and reply
+(`icmp_type=0`). Each packet can be seen on both incoming and outgoing spine
+links. These copies are not separate pings.
+
+For example, outer `10.0.0.5 -> 10.0.0.2` with VNI 500 is a tunnel from leaf5
+to leaf2. A later VNI 1000 segment is a separate tunnel observation. Use the
+actual packets and saved kernel routes to establish the path. In Wireshark,
+`vxlan && icmp` selects tunneled ping traffic.
 
 ## Results and permissions
 
-Automatic output uses the existing repository bind mount:
+Results use the existing checkout bind mount:
 
 ```text
-<VM FRR checkout>/capstone_results/evpn_capture_<UTC timestamp>/
-  spine1.pcapng, spine2.pcapng          # all leaf/spine links
-  leaf1_access.pcapng, leaf2_access.pcapng # selected host ports, ARP
-  *_dumpcap.log
+<VM checkout>/capstone_results/evpn_capture_<UTC timestamp>/
+  spine1.pcapng, spine2.pcapng
+  leaf*_access.pcapng, *_dumpcap.log
+  *_controller_ping.log
   capture_manifest.json, readiness.json, mobility_report.json
+  kernel_arp_settings.json             # settings method only
   analysis/
-    type2_timeline.html                # open this after completion
-    type2_events.csv, type2_summary.json
-    type2_links.csv, arp_arrivals.csv
+    type2_timeline.html
+    type2_events.csv, type2_summary.json, type2_links.csv
+    arp_arrivals.csv, vxlan_packets.csv
     *.pdml, *_tshark.log
 ```
 
-Roy's VM root is `/home/roy/frr/capstone_results/`. A teammate mounting
-`~/src/frr` gets `~/src/frr/capstone_results/` automatically. The root is created
-if missing. No image rebuild, container recreation, new mount or `docker cp`.
-Result ownership follows the mounted checkout owner, with files 666 and result
-directories 777. Parent home permissions are unchanged. Historical results
-are preserved; simplifying source files does not delete existing captures.
+My VM path is `/home/roy/frr/capstone_results/`. A teammate who mounting
+`~/src/frr` gets `~/src/frr/capstone_results/`. Missing result roots are created;
+no image rebuild, container recreation, new mount or docker cp is required.
+Ownership follows the mounted checkout owner. Result directories use mode 777
+and files use 666 so everyone can read/edit/delete them. Parent home permissions
+are unchanged. Results are excluded by the repository's `.gitignore`.
 
-Check dumpcap logs for reported drops before interpreting counts. TCP
-retransmissions marked by TShark are excluded from Type-2 totals. Packet loss,
-mid-stream capture and reassembly heuristics can limit completeness. Inspect
-original PCAPs when interpreting an unexpected sequence.
+## Reusable helpers
 
-## Reusable functions
+Helpers have parameter/return documentation in their docstrings. `tgen` is the
+running Topogen instance; `fabric` is the main test module, providing topology
+configuration and state readers. `host_pairs` is a list of namespace-name
+pairs, for example `[("host11", "host21"), ("host12", "host22")]`.
 
-`evpn_capture_mobility.py` has readable module-level helpers; no lambda, zip,
-comprehensions or nested function definitions were introduced.
-
-| Call | Arguments / result |
+| Helper | Purpose / result |
 |---|---|
-| `run_capture_mobility(tgen, fabric, host_pairs=None)` | `tgen` is the RUNNING Topogen object; `fabric` is the main test module (`sys.modules[__name__]`); optional list of host-name tuples selects pairs. Returns offline summary paths/counts. |
-| `wait_for_stability(tgen, fabric, states)` | `states` is a list of fresh host records from `_mobility_host_state`. Returns samples and normalized ready state. Passive five-second gate; raises if not ready within 60 seconds. |
-| `exchange_without_arp(tgen, first, second)` | `first`/`second` are state dictionaries, not names. Returns after-state dictionaries. Swaps configuration only. |
-| `check_arp_retry_ready(tgen, fabric, states)` | Pass the after-state dictionaries. Returns `None` once every moved MAC is local on its new host port and the remote kernel neighbors have cleared. Otherwise returns the first blocking condition. |
-| `capture.capture_start(tgen)` | Starts offline spine capture; returns session. `capture_mark`, `capture_stop`, and `capture_analyze` use that session. |
-
-Existing initial topology and ordinary mobility tests/helpers are unchanged.
-Change `host_pairs` in the new helper's default or pass another explicit list;
-all configured leaf/spine links are discovered from the main fabric dictionaries.
-
-Offline checks, inside `tests/topotests/bgp_evpn_capstone`:
-
-```bash
-python3 capture_decoder_checks.py
-python3 type2_report_checks.py
-python3 offline_capture_checks.py
-python3 result_storage_checks.py
-```
+| `run_capture_mobility(tgen, fabric, host_pairs=None, announcement_method="garp")` | Run one supported experiment; return offline report paths/counts. |
+| `exchange_without_arp(tgen, first, second)` | Swap fresh host-state dictionaries; return the two new states. No manual traffic or flush. |
+| `enable_kernel_arp_settings(tgen, fabric, robot_states)` | Enable and verify the host/leaf settings inside simulated nodes. |
+| `read_kernel_arp_settings(tgen, fabric, robot_states)` | Read current sysctl values without changing them. |
+| `read_readiness(tgen, fabric, states)` | Read sessions, local bindings and remote host routes; return `(error, state)`. |
+| `wait_for_stability(tgen, fabric, states)` | Require five seconds of continuously ready, unchanged relevant state. |
+| `ping_hosts_to_controller(tgen, session, states, controller_ip, stage)` | Ping once from each supplied host; return command times, exit codes and log paths. |
+| `read_host_kernel_neighbors(tgen, fabric, states)` | Read raw Linux neighbor entries for the expected host locations. |
+| `read_forwarding_state(tgen, fabric, states)` | Read kernel VRF routes, neighbors and bridge FDBs, including leaf5. |
+| `decode_arp_arrivals(session)` | Decode captured host requests into the arrival CSV and timeline markers. |
+| `decode_vxlan_packets(session)` | Decode outer/inner packet fields into the VXLAN CSV. |
