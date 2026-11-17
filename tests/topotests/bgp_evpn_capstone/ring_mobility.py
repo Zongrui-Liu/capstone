@@ -1,4 +1,4 @@
-"""Coordinated 4/8-robot clockwise IP/MAC identity rotation in FRR Topogen.
+"""Coordinated 2/4/8-robot clockwise IP/MAC identity rotation in FRR Topogen.
 
 A 'cycle' is ONE one-leaf clockwise hop for all active identities. Four
 cycles complete one revolution. Host namespaces/physical links do not move;
@@ -17,8 +17,11 @@ RINGS = (
 
 
 def active_rings(robot_count):
+    if robot_count == 2:
+        # Diagnostic only: reproduce the teammate's host11 <-> host21 swap.
+        return (("host11", "host21"),)
     if robot_count not in (4, 8):
-        raise ValueError("robot_count must be 4 or 8")
+        raise ValueError("robot_count must be 2, 4 or 8")
     return RINGS[: robot_count // 4]
 
 
@@ -32,9 +35,11 @@ def _write_csv(path, rows, columns):
 class RingMover:
     """Assign one unique IP/MAC pair to each access slot after every rotation.
 
-    Stage 1: take ALL active access ports down (break-before-make).
-    Stage 2: replace ALL IP/MAC identities while ports remain down.
-    Stage 3: bring ALL access ports up and install their default route.
+    Default down_up mode:
+      take interfaces down, change identities, bring interfaces up.
+    Alternative live mode (comparative diagnostic):
+      keep interfaces UP, flush ALL old IPv4 addresses, add ALL new
+      IPv4 addresses, then change MACs LAST to trigger arp_notify.
 
     Operations on separate host namespaces are submitted to a thread pool, but
     Linux does NOT guarantee exact hardware-synchronous execution. Actual
@@ -43,7 +48,7 @@ class RingMover:
 
     def __init__(self, tgen, leaves, robot_count,
                  trigger_gateway_ping=True, kernel_arp_notify=False,
-                 verify_local_state=False):
+                 verify_local_state=False, movement_mode="down_up"):
         self.tgen = tgen
         self.rings = active_rings(robot_count)
         self.slots = tuple(name for ring in self.rings for name in ring)
@@ -61,6 +66,9 @@ class RingMover:
         self.trigger_gateway_ping = trigger_gateway_ping
         self.kernel_arp_notify = kernel_arp_notify
         self.verify_local_state = verify_local_state
+        if movement_mode not in ("down_up", "live"):
+            raise ValueError("movement_mode must be down_up or live")
+        self.movement_mode = movement_mode
         if self.kernel_arp_notify:
             # This runs inside each robot host network namespace.
             # Linux then sends GARP on eth0 UP/MAC changes.
@@ -93,51 +101,91 @@ class RingMover:
         new_assignment = self.rotated()
         start = time.time()
 
-        def disconnect(name):
-            began = time.time()
+        def verify_identity(name):
+            if not self.verify_local_state:
+                return
             node = self.tgen.net[name]
-            node.cmd_raises("ip link set dev eth0 down")
-            node.cmd_raises("ip -4 addr flush dev eth0")
-            return began
+            data = json.loads(node.cmd_raises("ip -j address show dev eth0"))
+            if len(data) != 1:
+                raise AssertionError("{}: eth0 not found".format(name))
+            link = data[0]
+            got_mac = (link.get("address") or "").lower()
+            got_ips = {a.get("local") for a in link.get("addr_info", [])
+                       if a.get("family") == "inet"}
+            want_ip, want_mac = new_assignment[name]
+            want_ip = want_ip.split("/")[0]
+            if (got_mac != want_mac or got_ips != {want_ip}
+                    or "UP" not in link.get("flags", [])):
+                raise AssertionError(
+                    "{} identity mismatch: wanted {}/{}, UP; got {}/{}, flags={}".format(
+                        name, want_ip, want_mac, sorted(got_ips), got_mac,
+                        link.get("flags")))
 
-        down_started = self._parallel(disconnect)
+        if self.movement_mode == "down_up":
+            def disconnect(name):
+                began = time.time()
+                node = self.tgen.net[name]
+                node.cmd_raises("ip link set dev eth0 down")
+                node.cmd_raises("ip -4 addr flush dev eth0")
+                return began
 
-        def program(name):
-            ip, mac = new_assignment[name]
-            node = self.tgen.net[name]
-            node.cmd_raises("ip link set dev eth0 address {}".format(mac))
-            node.cmd_raises("ip address add {} dev eth0".format(ip))
+            down_started = self._parallel(disconnect)
 
-        self._parallel(program)
+            def program(name):
+                ip, mac = new_assignment[name]
+                node = self.tgen.net[name]
+                node.cmd_raises("ip link set dev eth0 address {}".format(mac))
+                node.cmd_raises("ip address add {} dev eth0".format(ip))
 
-        def reconnect(name):
-            node = self.tgen.net[name]
-            began = time.time()
-            node.cmd_raises("ip link set dev eth0 up")
-            node.cmd_raises("ip route replace default via {} dev eth0".format(
-                self.gateways[name]))
-            if self.verify_local_state:
-                # This verifies that Linux really has the expected identity.
-                # It does NOT verify that the network has converged.
-                data = json.loads(node.cmd_raises(
-                    "ip -j address show dev eth0"))
-                if len(data) != 1:
-                    raise AssertionError("{}: eth0 not found".format(name))
-                link = data[0]
-                got_mac = (link.get("address") or "").lower()
-                got_ips = {a.get("local") for a in link.get("addr_info", [])
-                           if a.get("family") == "inet"}
-                want_ip, want_mac = new_assignment[name]
-                want_ip = want_ip.split("/")[0]
-                if (got_mac != want_mac or got_ips != {want_ip}
-                        or "UP" not in link.get("flags", [])):
-                    raise AssertionError(
-                        "{} identity mismatch: wanted {}/{}, UP; got {}/{}, flags={}".format(
-                            name, want_ip, want_mac, sorted(got_ips), got_mac,
-                            link.get("flags")))
-            return began
+            self._parallel(program)
 
-        up_started = self._parallel(reconnect)
+            def reconnect(name):
+                node = self.tgen.net[name]
+                began = time.time()
+                node.cmd_raises("ip link set dev eth0 up")
+                node.cmd_raises("ip route replace default via {} dev eth0".format(
+                    self.gateways[name]))
+                verify_identity(name)
+                return began
+
+            up_started = self._parallel(reconnect)
+            down_skew = round(max(down_started.values()) - min(down_started.values()), 6)
+            up_skew = round(max(up_started.values()) - min(up_started.values()), 6)
+        else:
+            # LIVE mode keeps eth0 UP. The ordering matters:
+            # 1) remove all old IPs, preventing duplicate IPv4 identities;
+            # 2) add the new IPs while keeping each host's old MAC;
+            # 3) change MACs last, so arp_notify announces the NEW IP/MAC.
+            # Note: intermediate old-MAC/new-IP windows are a limitation of
+            # this identity-swap emulation, not a physical attachment move.
+            def remove_old_ip(name):
+                began = time.time()
+                self.tgen.net[name].cmd_raises("ip -4 addr flush dev eth0")
+                return began
+
+            flush_started = self._parallel(remove_old_ip)
+
+            def configure_new_ip(name):
+                ip, _ = new_assignment[name]
+                node = self.tgen.net[name]
+                node.cmd_raises("ip address add {} dev eth0".format(ip))
+                node.cmd_raises("ip route replace default via {} dev eth0".format(
+                    self.gateways[name]))
+
+            self._parallel(configure_new_ip)
+
+            def configure_new_mac(name):
+                _, mac = new_assignment[name]
+                began = time.time()
+                self.tgen.net[name].cmd_raises(
+                    "ip link set dev eth0 address {}".format(mac))
+                return began
+
+            mac_started = self._parallel(configure_new_mac)
+            self._parallel(verify_identity)
+            down_skew = ""  # No interface-down transition in live mode.
+            up_skew = ""    # No interface-up transition in live mode.
+            # Stage launch skew is available in the optional timeline markers.
 
         def announce(name):
             # Best-effort neighbor invalidation and ARP trigger after ALL
@@ -159,8 +207,8 @@ class RingMover:
             "apply_seconds": round(end - start, 6),
             "local_identity_verified": int(self.verify_local_state)
                 if self.verify_local_state else "",
-            "down_launch_skew_seconds": round(max(down_started.values()) - min(down_started.values()), 6),
-            "up_launch_skew_seconds": round(max(up_started.values()) - min(up_started.values()), 6),
+            "down_launch_skew_seconds": down_skew,
+            "up_launch_skew_seconds": up_skew,
         }
 
     def identity_location(self):

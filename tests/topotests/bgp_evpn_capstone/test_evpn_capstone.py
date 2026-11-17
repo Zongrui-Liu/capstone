@@ -918,7 +918,9 @@ def test_clockwise_ring_mobility():
     mover = RingMover(tgen, LEAVES, robots,
                       trigger_gateway_ping=False,
                       kernel_arp_notify=True,
-                      verify_local_state=True)
+                      verify_local_state=True,
+                      movement_mode=os.environ.get(
+                          "CAPSTONE_RING_MOVE_MODE", "down_up"))
     robot_ips = sorted({mover.assignment[slot][0].split("/")[0]
                         for slot in mover.slots})
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -979,7 +981,9 @@ def test_macip_automatic_after_ethernet_change():
 
     mover = RingMover(tgen, LEAVES, robot_count=4,
                       trigger_gateway_ping=False,
-                      kernel_arp_notify=True)
+                      kernel_arp_notify=True,
+                      movement_mode=os.environ.get(
+                          "CAPSTONE_AUTO_MACIP_MOVE_MODE", "down_up"))
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output = os.environ.get("CAPSTONE_AUTO_MACIP_OUTPUT_DIR") or os.path.join(
         CWD, "mobility_results", "auto_macip_" + timestamp)
@@ -1026,3 +1030,106 @@ def test_macip_automatic_after_ethernet_change():
 if __name__ == "__main__":
     args = ["-s"] + sys.argv[1:]
     sys.exit(pytest.main(args))
+
+
+def test_compare_mobility_timeline():
+    """Controlled first-GARP vs post-ping comparison, with detailed evidence.
+
+    This is diagnostic rather than a pass/fail BGP regression: missing MAC/IP
+    advertisements are captured as a finding. Controller probes stay disabled
+    until an optional explicitly marked post-quiet ping.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from mobility_timeline import TimelineRecorder
+
+    tgen = get_topogen()
+    if tgen.routers_have_failure():
+        pytest.skip(tgen.errors)
+    count = int(os.environ.get("CAPSTONE_TIMELINE_ROBOTS", "2"))
+    mode = os.environ.get("CAPSTONE_TIMELINE_MOVE_MODE", "live")
+    quiet = float(os.environ.get("CAPSTONE_TIMELINE_QUIET", "2"))
+    after = float(os.environ.get("CAPSTONE_TIMELINE_AFTER", "3"))
+    ping_after = os.environ.get("CAPSTONE_TIMELINE_POST_PING", "1") == "1"
+    flush_neigh = os.environ.get("CAPSTONE_TIMELINE_FLUSH_GW_NEIGH", "0") == "1"
+    if count not in (2, 4) or mode not in ("live", "down_up") or quiet < 0 or after < 0:
+        pytest.fail("Use robots=2/4, move mode=live/down_up, nonnegative durations")
+    if os.environ.get("CAPSTONE_LEAF_ARP_ACCEPT", "0") != "1":
+        pytest.fail("Set CAPSTONE_LEAF_ARP_ACCEPT=1 before pytest")
+
+    for name, peers in _expected_peers().items():
+        router = tgen.gears[name]
+        _, error = topotest.run_and_expect(
+            lambda r=router, p=peers: _peers_established(r, "l2vpn evpn", p),
+            None, count=90, wait=1)
+        assert error is None, "EVPN not established: {}".format(error)
+
+    _prime_host_adjacencies(tgen)  # Only before the observation begins.
+    # Confirm the initial robot host routes before the observation window.
+    leaf5 = tgen.gears["leaf5"]
+    initial_ips = ("45.0.0.11", "45.0.0.21") if count == 2 else (
+        "45.0.0.11", "45.0.0.21", "45.0.0.31", "45.0.0.41")
+    for ip in initial_ips:
+        _, error = topotest.run_and_expect(
+            lambda p=ip + "/32": _vrf_has_bgp_route(leaf5, p),
+            None, count=40, wait=1)
+        assert error is None, "Baseline route missing for " + ip
+    mover = RingMover(tgen, LEAVES, count,
+                      trigger_gateway_ping=False,
+                      kernel_arp_notify=True,
+                      verify_local_state=True, movement_mode=mode)
+    selected_leaves = tuple(sorted({"leaf" + slot[4] for slot in mover.slots}))
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output = Path(os.environ.get("CAPSTONE_TIMELINE_OUTPUT_DIR") or
+                  (Path(CWD) / "mobility_results" /
+                   "timeline_{}robots_{}_{}".format(count, mode, stamp)))
+    output.mkdir(parents=True, exist_ok=True)
+
+    with RingObservation(tgen, output, CWD, robot_ips=(),
+                         enable_controller_probes=False,
+                         capture_access_arp=True,
+                         sample_seconds=0.5):
+        with TimelineRecorder(tgen, output, selected_leaves) as timeline:
+            timeline.mark("baseline", robots=count, movement_mode=mode,
+                          post_ping=ping_after, flush_gateway_neighbor=flush_neigh)
+            timeline.snapshot("baseline", mover.assignment)
+            timeline.mark("move_start")
+            result = mover.step()
+            timeline.mark("move_end", **result)
+            timeline.snapshot("post_move", mover.assignment)
+            # This sample may occur later than 250 ms if snapshot commands
+            # themselves take longer. Saved timestamps always take priority.
+            time.sleep(0.25)
+            timeline.snapshot("quiet_early", mover.assignment)
+            time.sleep(max(0, quiet - (time.time() - result["end_epoch"])))
+            timeline.snapshot("quiet_end", mover.assignment)
+            timeline.mark("quiet_end")
+
+            if ping_after:
+                # An intentionally separate experiment phase: only now may
+                # host->controller ICMP produce ordinary gateway ARP.
+                def ping_controller(slot):
+                    node = tgen.net[slot]
+                    if flush_neigh:
+                        node.cmd("ip neigh flush dev eth0")
+                    started = time.time()
+                    output_text = node.cmd(
+                        "ping -n -c 1 -W 1 -I eth0 20.0.0.51")
+                    return slot, started, time.time(), output_text[-500:]
+
+                timeline.mark("post_ping_start")
+                with ThreadPoolExecutor(max_workers=len(mover.slots)) as pool:
+                    outcomes = list(pool.map(ping_controller, mover.slots))
+                for slot, start, end, output_text in outcomes:
+                    timeline.mark("post_ping_result", access_host=slot,
+                                  command_start_epoch=start,
+                                  command_end_epoch=end,
+                                  output=output_text)
+                timeline.mark("post_ping_end")
+                timeline.snapshot("post_ping", mover.assignment)
+            time.sleep(after)
+            timeline.snapshot("final", mover.assignment)
+            timeline.mark("finished")
+    logger.info("Mobility timeline evidence saved to %s", output)
+    logger.info("Build report: sudo -E python3 build_transition_timeline.py %s", output)
